@@ -501,6 +501,40 @@ def _draw_task_sidebar(
         )
 
 
+BDAY_ROW_H = 17
+
+
+def _birthday_box_h(rows: int) -> float:
+    """Height a birthday box needs for `rows` entries, header included."""
+    return 28 + 7 + rows * BDAY_ROW_H + 3
+
+
+def _draw_birthday_box(
+    d: ImageDraw.ImageDraw,
+    birthdays: list[Ev],
+    box: tuple[float, float, float, float],
+    fonts: dict[str, ImageFont.ImageFont],
+    hidden: int = 0,
+) -> None:
+    """Upcoming birthdays as one date + name line each."""
+    x0, y0, x1, y1 = box
+    d.rectangle([x0, y0, x1, y1], outline=0, width=1, fill=250)
+    d.rectangle([x0, y0, x1, y0 + 28], fill=0)
+    d.text(((x0 + x1) / 2, y0 + 5), "CUMPLES", font=fonts["head"], fill=255, anchor="ma")
+
+    name_x = x0 + 44
+    name_w = x1 - name_x - 8
+    y = y0 + 33
+    for e in birthdays:
+        name = e.summary[7:] if e.summary.startswith("Cumple ") else e.summary
+        d.text((x0 + 8, y + 1), e.start.strftime("%d/%m"), font=fonts["meta"], fill=90)
+        d.text((name_x, y), _fit_text(name, fonts["task"], name_w), font=fonts["task"], fill=0)
+        y += BDAY_ROW_H
+
+    if hidden:
+        d.text(((x0 + x1) / 2, y + 1), f"+{hidden} mas", font=fonts["meta"], fill=110, anchor="ma")
+
+
 def draw_png(
     cfg: Config,
     events: list[Ev],
@@ -518,7 +552,7 @@ def draw_png(
     img = Image.new("L", (w, h), 255)
     d = ImageDraw.Draw(img)
 
-    footer_h = 72
+    footer_h = 50
     margin_l = 52  # hour labels
     margin_r = 16
     margin_t = 16
@@ -555,8 +589,9 @@ def draw_png(
     grid_right = w - margin_r
 
     tasks = tasks or []
+    bdays = sorted(birthdays or [], key=lambda e: e.start)
     sidebar_w = 0.0
-    if tasks:
+    if tasks or bdays:
         sidebar_w = max(150.0, min(215.0, w * 0.21))
         grid_right -= sidebar_w + 10
 
@@ -737,40 +772,37 @@ def draw_png(
                     d.text((tx, ty), note, font=f_meta, fill=ink)
 
     if sidebar_w:
-        _draw_task_sidebar(
-            d,
-            tasks,
-            (w - margin_r - sidebar_w, margin_t, w - margin_r, grid_bottom),
-            start,
-            {"head": f_foot, "task": f_task, "meta": f_task_meta},
-        )
+        side_fonts = {"head": f_foot, "task": f_task, "meta": f_task_meta}
+        side_x0 = w - margin_r - sidebar_w
+        side_x1 = w - margin_r
 
-    # Footer: exit hint, plus upcoming birthdays (usually outside this week)
+        # The birthday box takes only the height its rows need; tasks get the rest.
+        bday_h = 0.0
+        rows = len(bdays)
+        avail = grid_bottom - margin_t - (150.0 if tasks else 0.0)
+        while rows > 0 and _birthday_box_h(rows) > avail:
+            rows -= 1
+        hidden = len(bdays) - rows
+        if hidden and rows:
+            rows -= 1  # trade a row for the "+N mas" counter
+            hidden += 1
+        if rows:
+            bday_h = _birthday_box_h(rows + (1 if hidden else 0))
+
+        if tasks:
+            tasks_bottom = grid_bottom - (bday_h + 10 if bday_h else 0)
+            _draw_task_sidebar(d, tasks, (side_x0, margin_t, side_x1, tasks_bottom), start, side_fonts)
+        if bday_h:
+            b_y0 = grid_bottom - bday_h if tasks else margin_t
+            _draw_birthday_box(d, bdays[:rows], (side_x0, b_y0, side_x1, b_y0 + bday_h), side_fonts, hidden)
+
+    # Footer: exit hint only
     d.rectangle([0, h - footer_h, w, h], fill=0)
-    d.text((w // 2, h - footer_h + 8), "SALIR", font=f_foot, fill=255, anchor="ma")
-
-    upcoming = sorted(birthdays or [], key=lambda e: e.start)[:3]
-    if upcoming:
-        parts = []
-        for e in upcoming:
-            name = e.summary[7:] if e.summary.startswith("Cumple ") else e.summary
-            parts.append(f"{name} {e.start.strftime('%d/%m')}")
-        line = "Cumples: " + "  -  ".join(parts)
-        d.text(
-            (w // 2, h - footer_h + 32),
-            _fit_text(line, f_hint, w - 40),
-            font=f_hint,
-            fill=255,
-            anchor="ma",
-        )
-        hint_y = h - footer_h + 52
-    else:
-        hint_y = h - footer_h + 36
-
+    d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
     d.text(
-        (w // 2, hint_y),
+        (w // 2, h - footer_h + 27),
         "Toca la pantalla o boton power",
-        font=f_task_meta if upcoming else f_hint,
+        font=f_hint,
         fill=255,
         anchor="ma",
     )
