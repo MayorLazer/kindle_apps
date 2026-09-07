@@ -193,7 +193,11 @@ start_waiter() {
 draw_png() {
 	_img="$1"
 	if [ -n "${FBINK}" ] && [ -f "${FBINK}" ]; then
-		# Prefer a single flashing paint (clear + image).
+		# w=0,h=0 scales to the full screen, so a PNG built for the wrong
+		# resolution still covers the UI instead of cropping or leaving borders.
+		if "${FBINK}" -g "file=${_img},w=0,h=0" -f >> "${LOG}" 2>&1; then
+			return 0
+		fi
 		if "${FBINK}" -g "file=${_img}" -f >> "${LOG}" 2>&1; then
 			return 0
 		fi

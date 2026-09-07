@@ -125,8 +125,8 @@ def load_config(path: Path) -> Config:
         end_hour=int(data.get("end_hour", 22)),
         output=out,
         png_output=png,
-        png_width=int(screen.get("png_width", 600)),
-        png_height=int(screen.get("png_height", 800)),
+        png_width=int(screen.get("png_width", 758)),
+        png_height=int(screen.get("png_height", 1024)),
         png_rotate=int(screen.get("png_rotate", 0)) % 360,
         page_width_in=float(screen.get("width_in", 3.58)),
         page_height_in=float(screen.get("height_in", 4.82)),
@@ -640,10 +640,10 @@ def write_ci_config(path: Path) -> None:
         raise SystemExit("Set ICS_URL or ICS_URLS env var for CI")
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
-    # Must match the visible panel. Touch/K4 = 600x800, PW1/PW2 = 758x1024,
-    # PW3/PW4 = 1072x1448.
-    png_w = os.environ.get("PNG_WIDTH", "600")
-    png_h = os.environ.get("PNG_HEIGHT", "800")
+    # Must match the framebuffer fbink reports. PW1/PW2 = 758x1024,
+    # Touch/K4 = 600x800, PW3/PW4 = 1072x1448.
+    png_w = os.environ.get("PNG_WIDTH", "758")
+    png_h = os.environ.get("PNG_HEIGHT", "1024")
     # 90 = landscape view for a Kindle stood on its right edge.
     png_rot = os.environ.get("PNG_ROTATE", "90")
     lines = [
