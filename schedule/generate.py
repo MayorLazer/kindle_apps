@@ -46,6 +46,7 @@ WEEKDAYS_ES = [
     "sabado",
     "domingo",
 ]
+WEEKDAYS_ES_SHORT = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 MONTHS_ES = [
     "",
     "enero",
@@ -513,12 +514,12 @@ def draw_png(
     margin_l = 52  # hour labels
     margin_r = 16
     margin_t = 16
-    header_h = 70
+    # Single-line day header ("Lun 07") so the hour rows get the space back.
+    header_h = 34
     margin_l = 40 if (cfg.end_hour - cfg.start_hour) > 16 else margin_l
     allday_h = 0
 
-    f_day = pil_fonts(20, bold=True)
-    f_day_num = pil_fonts(28, bold=True)
+    f_day = pil_fonts(22, bold=True)
     f_hour = pil_fonts(16, bold=False)
     f_title = pil_fonts(18, bold=True)
     f_meta = pil_fonts(14, bold=False)
@@ -578,11 +579,10 @@ def draw_png(
     # Day headers
     for i, day in enumerate(days):
         x = grid_left + i * col_w
-        label = WEEKDAYS_ES[day.weekday()].capitalize()
-        d.text((x + col_w / 2, margin_t + 4), label, font=f_day, fill=0, anchor="ma")
-        d.text((x + col_w / 2, margin_t + 30), f"{day.day:02d}", font=f_day_num, fill=0, anchor="ma")
+        label = f"{WEEKDAYS_ES_SHORT[day.weekday()]} {day.day:02d}"
+        d.text((x + col_w / 2, margin_t + 2), label, font=f_day, fill=0, anchor="ma")
         if day == start:
-            d.rectangle([x + 8, margin_t, x + col_w - 8, margin_t + header_h - 8], outline=0, width=2)
+            d.rectangle([x + 8, margin_t - 2, x + col_w - 8, margin_t + header_h - 6], outline=0, width=2)
 
     # All-day row
     if allday_h:
