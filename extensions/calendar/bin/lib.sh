@@ -10,11 +10,24 @@ LOG="${CACHE}/calendar.log"
 
 mkdir -p "${CACHE}" 2>/dev/null
 
+# Keep the log from filling the device: curl output and fbink dumps add up.
+LOG_MAX=262144
+
+rotate_log() {
+	[ -f "${LOG}" ] || return 0
+	_lsz=$(wc -c < "${LOG}" 2>/dev/null | tr -cd '0-9')
+	[ -n "${_lsz}" ] || return 0
+	if [ "${_lsz}" -gt "${LOG_MAX}" ]; then
+		mv -f "${LOG}" "${LOG}.1" 2>/dev/null
+	fi
+}
+
 log() {
 	echo "$(date 2>/dev/null) $*" >> "${LOG}" 2>/dev/null
 }
 
 load_config() {
+	rotate_log
 	if [ -f "${CONFIG}" ]; then
 		_tmp="${CACHE}/config.cleaned"
 		tr -d '\r' < "${CONFIG}" > "${_tmp}" 2>/dev/null || cp "${CONFIG}" "${_tmp}"
@@ -25,11 +38,15 @@ load_config() {
 	: "${WGET_INSECURE:=1}"
 	: "${FBINK:=/mnt/us/libkh/bin/fbink}"
 	: "${CURL:=}"
+	: "${CALENDAR_TOKEN:=}"
 	# Safety net: restore the UI even if no exit event ever arrives.
 	: "${EXIT_TIMEOUT_MIN:=120}"
+	# Auto refresh interval while the calendar stays on screen.
+	: "${AUTO_REFRESH_MIN:=240}"
 	FBINK=$(echo "${FBINK}" | tr -d '\r')
 	CALENDAR_URL=$(echo "${CALENDAR_URL}" | tr -d '\r')
 	CURL=$(echo "${CURL}" | tr -d '\r')
+	CALENDAR_TOKEN=$(echo "${CALENDAR_TOKEN}" | tr -d '\r')
 
 	if [ ! -f "${FBINK}" ]; then
 		for c in /mnt/us/libkh/bin/fbink /mnt/us/extensions/MRInstaller/bin/K5/fbink; do
@@ -74,11 +91,24 @@ download_url() {
 		https://*)
 			if [ -n "${CURL}" ] && [ -f "${CURL}" ]; then
 				log "download: curl ${CURL} ${_url}"
-				if "${CURL}" -k -sS -L --fail -A "KindleCalendar/1.0" -o "${_out}" "${_url}" >> "${LOG}" 2>&1 \
-					&& [ -s "${_out}" ]; then
+				# CALENDAR_TOKEN reads a private repo over raw.githubusercontent
+				# so the calendar is not published on a public URL.
+				if [ -n "${CALENDAR_TOKEN}" ]; then
+					"${CURL}" -k -sS -L --fail -A "KindleCalendar/1.0" \
+						-H "Authorization: Bearer ${CALENDAR_TOKEN}" \
+						-H "Accept: application/vnd.github.raw" \
+						-o "${_out}" "${_url}" >> "${LOG}" 2>&1
+				else
+					"${CURL}" -k -sS -L --fail -A "KindleCalendar/1.0" \
+						-o "${_out}" "${_url}" >> "${LOG}" 2>&1
+				fi
+				_rc=$?
+				if [ "${_rc}" = "0" ] && [ -s "${_out}" ]; then
 					return 0
 				fi
-				log "download: curl failed"
+				log "download: curl failed rc=${_rc}"
+				# curl leaves a partial file behind; wget cleans up itself.
+				rm -f "${_out}"
 			else
 				log "download: https needs curl (BusyBox wget has no SSL)"
 			fi
@@ -130,6 +160,20 @@ is_png() {
 
 	log "is_png: no dd/od probe available, accepting $1"
 	return 0
+}
+
+# A PNG ends with the IEND chunk. A download cut short by Wi-Fi dropping still
+# has a valid header, so check the trailer before replacing a good cache.
+png_complete() {
+	[ -f "$1" ] || return 1
+	_end=$(tail -c 8 "$1" 2>/dev/null | dd bs=1 count=4 2>/dev/null)
+	if [ -z "${_end}" ]; then
+		log "png_complete: no tail/dd probe, accepting $1"
+		return 0
+	fi
+	[ "${_end}" = "IEND" ] && return 0
+	log "png_complete: truncated, trailer='${_end}'"
+	return 1
 }
 
 wifi_on() {
@@ -185,6 +229,15 @@ unlock_ui() {
 	lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home 2>/dev/null
 }
 
+kill_auto() {
+	if [ -f "${CACHE}/auto.pid" ]; then
+		_a=$(cat "${CACHE}/auto.pid" 2>/dev/null)
+		[ -n "${_a}" ] && kill "${_a}" 2>/dev/null
+		rm -f "${CACHE}/auto.pid"
+	fi
+	pkill -f "extensions/calendar/bin/auto" 2>/dev/null
+}
+
 kill_waiter() {
 	if [ -f "${CACHE}/waiter.pid" ]; then
 		_w=$(cat "${CACHE}/waiter.pid" 2>/dev/null)
@@ -199,6 +252,15 @@ start_waiter() {
 	rm -f "${CACHE}/exit.reason" "${CACHE}/STOP" 2>/dev/null
 	/bin/sh "${BIN}/wait-exit.sh" >> "${LOG}" 2>&1 &
 	echo $! > "${CACHE}/waiter.pid"
+}
+
+# The waiter is the only thing that can un-freeze the framework, so callers
+# must be able to check it really came up.
+waiter_alive() {
+	[ -f "${CACHE}/waiter.pid" ] || return 1
+	_wp=$(cat "${CACHE}/waiter.pid" 2>/dev/null)
+	[ -n "${_wp}" ] || return 1
+	kill -0 "${_wp}" 2>/dev/null
 }
 
 # Try FBInk image flags used across builds; fall back to eips -g.
@@ -261,10 +323,14 @@ display_image() {
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
 			/usr/sbin/eips 2 5 "Ver cache/calendar.log" 2>/dev/null
 			log "display: draw failed before lock"
+			allow_sleep
 			exit 1
 		fi
 
 		lock_ui
+		# From here the framework is frozen and only unlock_ui can bring it
+		# back, so never leave on a signal without releasing it.
+		trap 'log "display: signal after lock"; unlock_ui; exit 1' HUP INT TERM
 		if ! draw_png "${_path}"; then
 			unlock_ui
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
@@ -273,6 +339,16 @@ display_image() {
 		fi
 		echo "1" > "${CACHE}/showing.pid"
 		start_waiter
+		sleep 1
+		if ! waiter_alive; then
+			# Nothing would watch for the exit tap: the UI would stay frozen
+			# until the battery died.
+			log "display: waiter did not start, unlocking"
+			unlock_ui
+			rm -f "${CACHE}/showing.pid" 2>/dev/null
+			/usr/sbin/eips 2 3 "Error watcher, UI restaurada" 2>/dev/null
+			exit 1
+		fi
 		log "display: ok ${_path}"
 
 		# Late repaints (KUAL cover, home chrome) can land after our draw; overwrite them.

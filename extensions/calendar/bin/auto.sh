@@ -1,0 +1,72 @@
+#!/bin/sh
+# Keep the calendar on screen and refresh it every AUTO_REFRESH_MIN minutes.
+#
+# It only runs while the calendar is actually displayed: as soon as you exit
+# the view (tap, power button, KUAL Salir) the loop stops. That way it can
+# never re-freeze the framework while you are reading a book.
+#
+# Timers do not advance while the Kindle is suspended, so a refresh lands on
+# wake rather than exactly on the interval. Each refresh turns Wi-Fi on and
+# off again, which costs battery: keep the interval long.
+
+EXT="/mnt/us/extensions/calendar"
+# shellcheck disable=SC1091
+. "${EXT}/bin/lib.sh"
+load_config
+
+# KUAL closes its menu shell right after launching us, which would take the
+# loop down with it. Re-launch detached and let the parent return at once.
+if [ "$1" != "--child" ]; then
+	if command -v nohup >/dev/null 2>&1; then
+		nohup /bin/sh "${BIN}/auto.sh" --child >> "${LOG}" 2>&1 &
+	else
+		/bin/sh "${BIN}/auto.sh" --child >> "${LOG}" 2>&1 &
+	fi
+	log "auto: detached child"
+	exit 0
+fi
+
+# Only one loop at a time.
+if [ -f "${CACHE}/auto.pid" ]; then
+	_old=$(cat "${CACHE}/auto.pid" 2>/dev/null)
+	if [ -n "${_old}" ] && kill -0 "${_old}" 2>/dev/null; then
+		kill "${_old}" 2>/dev/null
+		log "auto: replaced previous loop pid=${_old}"
+	fi
+fi
+
+echo $$ > "${CACHE}/auto.pid"
+trap 'rm -f "${CACHE}/auto.pid" 2>/dev/null; log "auto: signal, stopping"; exit 0' HUP INT TERM
+log "auto: start every ${AUTO_REFRESH_MIN}min"
+
+/bin/sh "${BIN}/update.sh"
+
+# display_image paints from a background subshell, so the view takes a few
+# seconds to register. Without this wait the loop would quit immediately.
+_wait=0
+while [ "${_wait}" -lt 30 ]; do
+	[ -f "${CACHE}/showing.pid" ] && break
+	sleep 2
+	_wait=$((_wait + 2))
+done
+if [ ! -f "${CACHE}/showing.pid" ]; then
+	log "auto: nothing on screen, stopping"
+	rm -f "${CACHE}/auto.pid" 2>/dev/null
+	exit 1
+fi
+
+_interval=$((AUTO_REFRESH_MIN * 60))
+while :; do
+	_slept=0
+	while [ "${_slept}" -lt "${_interval}" ]; do
+		sleep 10
+		_slept=$((_slept + 10))
+		if [ ! -f "${CACHE}/showing.pid" ] || [ -f "${CACHE}/STOP" ]; then
+			log "auto: view closed, stopping"
+			rm -f "${CACHE}/auto.pid" 2>/dev/null
+			exit 0
+		fi
+	done
+	log "auto: refresh"
+	/bin/sh "${BIN}/update.sh"
+done

@@ -1,20 +1,28 @@
-# Copy to "config" on the Kindle (same folder as this file is NOT used —
-# real config lives at: /mnt/us/extensions/calendar/bin/config ).
+# Kindle config — copy to /mnt/us/extensions/calendar/bin/config
 #
-# Stock Kindle wget (BusyBox 1.17) cannot do HTTPS. Pick ONE:
-#
-# Install curl (recommended):
+# Stock BusyBox wget cannot do HTTPS. Install curl with:
 #   powershell -ExecutionPolicy Bypass -File .\extensions\calendar\install-curl.ps1
 #
-# Or use PC LAN HTTP: schedule/serve-http.ps1 + http:// URL
-# Or USB copy PNG + Mostrar (cache)
+# The calendar contains personal data, so it is served from a PRIVATE repo
+# through the GitHub API instead of a public URL. See SETUP.md.
 
-CALENDAR_URL="https://REPLACE.github.io/kindle_apps/calendar.png"
+CALENDAR_URL="https://api.github.com/repos/OWNER/kindle_calendar_data/contents/calendar.png?ref=dist"
+
+# Fine-grained token, read-only, limited to the data repo above.
+# GitHub -> Settings -> Developer settings -> Fine-grained tokens:
+#   Repository access: only kindle_calendar_data
+#   Permissions: Contents = Read-only
+# Leave empty when CALENDAR_URL is public (LAN http:// or Pages).
+CALENDAR_TOKEN=""
 
 # Static curl from install-curl.ps1 (or USBNet: /mnt/us/usbnet/bin/curl)
 CURL="/mnt/us/extensions/calendar/bin/curl"
 
-# Kept for docs; ignored by ancient BusyBox wget (no --no-check-certificate).
-WGET_INSECURE=1
-
 FBINK="/mnt/us/libkh/bin/fbink"
+
+# Restore the UI automatically after this long, even with no exit event.
+EXIT_TIMEOUT_MIN=120
+
+# "Auto" menu entry: minutes between refreshes while the calendar is on
+# screen. Each refresh wakes Wi-Fi, so keep it long.
+AUTO_REFRESH_MIN=240

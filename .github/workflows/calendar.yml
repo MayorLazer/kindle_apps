@@ -75,28 +75,53 @@ jobs:
           export PNG_ROTATE="${PNG_ROTATE:-90}"
           python schedule/generate.py --from-env --config schedule/config.ci.toml
 
-      - name: Stage GitHub Pages site
+      # The calendar holds personal events, tasks and contacts' birthdays, so
+      # it goes to a private repo. This repo is public: nothing generated here
+      # may be published as a Pages file or a workflow artifact.
+      - name: Publish to private data repo
         env:
-          PUBLISH_SLUG: ${{ secrets.PUBLISH_SLUG }}
+          DATA_DEPLOY_KEY: ${{ secrets.DATA_DEPLOY_KEY }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: |
+          if [ -z "$DATA_DEPLOY_KEY" ] || [ -z "$DATA_REPO" ]; then
+            echo "Missing DATA_DEPLOY_KEY secret or DATA_REPO variable."
+            echo "See SETUP.md 'Private delivery'."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          printf '%s\n' "$DATA_DEPLOY_KEY" > ~/.ssh/data_key
+          chmod 600 ~/.ssh/data_key
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/data_key -o IdentitiesOnly=yes"
+
+          rm -rf dist && mkdir dist
+          cp schedule/output/calendar.png schedule/output/calendar.pdf dist/
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > dist/updated.txt
+          cd dist
+          # A fresh orphan commit force-pushed every run keeps the data repo at
+          # one commit, instead of growing a binary every 4 hours forever.
+          git init -q
+          git checkout -q -b dist
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -A
+          git commit -q -m "calendar $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -q --force "git@github.com:${DATA_REPO}.git" dist:dist
+          echo "Pushed calendar.png + calendar.pdf to ${DATA_REPO} (branch dist)"
+
+      # Overwrites the previously published site, so the old public
+      # calendar.png / calendar.pdf stop resolving.
+      - name: Stage placeholder Pages site
         run: |
           rm -rf _site
           mkdir -p _site
-          cp schedule/output/calendar.png _site/calendar.png
-          cp schedule/output/calendar.pdf _site/calendar.pdf
-          # Optional obscure path so the URL is harder to guess
-          if [ -n "$PUBLISH_SLUG" ]; then
-            mkdir -p "_site/c/$PUBLISH_SLUG"
-            cp schedule/output/calendar.png "_site/c/$PUBLISH_SLUG/calendar.png"
-            echo "Slug URL path: /c/${PUBLISH_SLUG}/calendar.png"
-          fi
           cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
           <meta charset="utf-8">
           <title>kindle calendar</title>
-          <p>calendar.png is published for the Kindle KUAL app.</p>
-          <p><a href="./calendar.png">calendar.png</a></p>
+          <p>Nothing is published here. The generated calendar is delivered
+          privately to the Kindle.</p>
           EOF
-          date -u +"Generated %Y-%m-%dT%H:%M:%SZ" > _site/updated.txt
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -106,11 +131,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: calendar-images
-          path: |
-            schedule/output/calendar.png
-            schedule/output/calendar.pdf

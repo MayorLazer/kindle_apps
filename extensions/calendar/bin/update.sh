@@ -45,6 +45,9 @@ keep_awake
 if ! wifi_on; then
 	/usr/sbin/eips 2 3 "Sin Wi-Fi" 2>/dev/null
 	log "update: wifi failed"
+	# wifi_on already enabled the radio; leaving it on drains the battery
+	# for days on a device that mostly sits idle.
+	wifi_off
 	if _img=$(find_image); then
 		display_image "${_img}"
 		exit 1
@@ -60,7 +63,7 @@ log "update: fetch ${CALENDAR_URL}"
 _ok=0
 if download_url "${CALENDAR_URL}" "${_tmp}"; then
 	_sz=$(wc -c < "${_tmp}" 2>/dev/null | tr -cd '0-9')
-	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ] && is_png "${_tmp}"; then
+	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ] && is_png "${_tmp}" && png_complete "${_tmp}"; then
 		mv "${_tmp}" "${IMG}"
 		cp -f "${IMG}" /mnt/us/documents/calendar.png 2>/dev/null
 		log "update: ok bytes=${_sz}"

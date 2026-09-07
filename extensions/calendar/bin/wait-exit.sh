@@ -29,6 +29,19 @@ _exit_now() {
 	exit 0
 }
 
+# A refresh kills the old waiter on purpose while the calendar stays on screen,
+# so only release the framework when nothing is meant to be displayed.
+_on_signal() {
+	if [ ! -f "${CACHE}/showing.pid" ]; then
+		log "wait-exit: signal with nothing showing, unlocking"
+		unlock_ui
+	else
+		log "wait-exit: signal while showing, leaving UI locked"
+	fi
+	exit 0
+}
+trap _on_signal HUP INT TERM
+
 _pids=""
 
 _track() {
@@ -103,7 +116,11 @@ while true; do
 	fi
 	if [ ! -f "${CACHE}/showing.pid" ]; then
 		_kill_watchers
-		log "wait-exit: showing.pid gone, exiting"
+		# stop.sh normally clears this after unlocking, but if the file went
+		# missing another way the framework would stay frozen for good.
+		log "wait-exit: showing.pid gone, unlocking"
+		unlock_ui
+		rm -f "${CACHE}/waiter.pid" 2>/dev/null
 		exit 0
 	fi
 	if [ "${_elapsed}" -ge "${_limit}" ]; then
