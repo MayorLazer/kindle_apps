@@ -16,6 +16,10 @@ output = "output/calendar.pdf"
 png_output = "output/calendar.png"
 insecure_ssl = false
 
+# Optional: Apps Script feed with Google Tasks + Contacts birthdays.
+# See apps-script/Code.gs. Include the ?token=... part. Treat it as a secret.
+extras_url = ""
+
 ssh_host = ""
 ssh_port = 2222
 ssh_user = "root"

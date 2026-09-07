@@ -70,6 +70,32 @@ Optional secrets:
 |--------|---------|
 | `PUBLISH_SLUG` | Random string so the PNG URL is harder to guess |
 | `ICS_URLS` | Extra calendars, separated by `\|` |
+| `EXTRAS_URL` | Apps Script feed: Google Tasks + birthdays (see below) |
+
+### 3b. Optional: Google Tasks + Contacts birthdays
+
+Google gives no iCal feed for Tasks, and the auto **Birthdays** calendar has no
+secret iCal address. One small Apps Script in your own account publishes both.
+
+1. Open [script.google.com](https://script.google.com) → **New project**
+2. Replace `Code.gs` with [`schedule/apps-script/Code.gs`](schedule/apps-script/Code.gs)
+3. **Services (+)** → add **Tasks API** and **People API**
+4. Set `SHARED_SECRET` to a long random string
+5. **Deploy → New deployment → Web app**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+6. Authorize when prompted, copy the `/exec` URL
+7. Add repository secret `EXTRAS_URL`:
+
+```text
+https://script.google.com/macros/s/DEPLOY_ID/exec?token=YOUR_SECRET
+```
+
+"Anyone" only means unauthenticated; the token keeps it private. Redeploy after
+editing the script (**Manage deployments → Edit → Deploy**).
+
+Result: pending tasks show in a **TAREAS** sidebar, birthdays as all-day chips.
+If the feed is unreachable the calendar still renders, just without them.
 
 Optional **Variables** (Settings → Secrets → Variables):
 

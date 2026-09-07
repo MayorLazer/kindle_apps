@@ -45,6 +45,7 @@ jobs:
         env:
           ICS_URL: ${{ secrets.ICS_URL }}
           ICS_URLS: ${{ secrets.ICS_URLS }}
+          EXTRAS_URL: ${{ secrets.EXTRAS_URL }}
           TIMEZONE: ${{ vars.TIMEZONE }}
           CALENDAR_DAYS: ${{ vars.CALENDAR_DAYS }}
           PNG_WIDTH: ${{ vars.PNG_WIDTH }}

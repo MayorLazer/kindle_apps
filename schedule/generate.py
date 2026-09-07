@@ -18,6 +18,7 @@ PDF is optional for KOReader.
 from __future__ import annotations
 
 import argparse
+import json
 import ssl
 import tomllib
 import urllib.request
@@ -80,6 +81,7 @@ class Config:
     page_width_in: float
     page_height_in: float
     insecure_ssl: bool
+    extras_url: str = ""
 
 
 @dataclass
@@ -131,7 +133,68 @@ def load_config(path: Path) -> Config:
         page_width_in=float(screen.get("width_in", 3.58)),
         page_height_in=float(screen.get("height_in", 4.82)),
         insecure_ssl=bool(data.get("insecure_ssl", False)),
+        extras_url=str(data.get("extras_url", "")).strip(),
     )
+
+
+@dataclass
+class Task:
+    title: str
+    due: date | None
+    notes: str = ""
+
+
+def fetch_extras(cfg: Config) -> tuple[list[Task], list[Ev]]:
+    """Read the Apps Script feed: Google Tasks plus Contacts birthdays.
+
+    Never fatal: the calendar must still render if the feed is down.
+    """
+    if not cfg.extras_url:
+        return [], []
+    try:
+        raw = fetch_ics(cfg.extras_url, cfg.insecure_ssl)
+        data = json.loads(raw.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001 - report and carry on
+        print(f"WARNING: extras feed failed: {exc}")
+        return [], []
+
+    for key in ("tasksError", "birthdaysError", "error"):
+        if data.get(key):
+            print(f"WARNING: extras feed {key}: {data[key]}")
+
+    tasks: list[Task] = []
+    for t in data.get("tasks") or []:
+        title = str(t.get("title", "")).strip()
+        if not title:
+            continue
+        due: date | None = None
+        if t.get("due"):
+            try:
+                due = date.fromisoformat(str(t["due"])[:10])
+            except ValueError:
+                due = None
+        tasks.append(Task(title=sanitize_text(title), due=due, notes=sanitize_text(str(t.get("notes", "")))))
+
+    birthdays: list[Ev] = []
+    for b in data.get("birthdays") or []:
+        name = str(b.get("name", "")).strip()
+        if not name or not b.get("date"):
+            continue
+        try:
+            day = date.fromisoformat(str(b["date"])[:10])
+        except ValueError:
+            continue
+        birthdays.append(
+            Ev(
+                start=day,
+                end=day + timedelta(days=1),
+                summary=f"Cumple {sanitize_text(name)}",
+                all_day=True,
+            )
+        )
+
+    print(f"Extras: {len(tasks)} task(s), {len(birthdays)} birthday(s).")
+    return tasks, birthdays
 
 
 def fetch_ics(url: str, insecure: bool) -> bytes:
@@ -251,19 +314,19 @@ def sanitize_text(text: str) -> str:
             continue
         if 0xFE00 <= o <= 0xFE0F:
             continue
-        if ch in "·•●∙":
+        if ch in "Â·â€¢â—âˆ™":
             out.append("-")
             continue
-        if ch in "—–―":
+        if ch in "â€”â€“â€•":
             out.append("-")
             continue
-        if ch == "…":
+        if ch == "â€¦":
             out.append("...")
             continue
-        if ch in "“”„":
+        if ch in "â€œâ€â€ž":
             out.append('"')
             continue
-        if ch in "‘’":
+        if ch in "â€˜â€™":
             out.append("'")
             continue
         out.append(ch)
@@ -363,7 +426,49 @@ def _assign_lanes(day_events: list[Ev]) -> dict[int, tuple[int, int]]:
     return {i: (assigned[i], max_lane) for i in assigned}
 
 
-def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
+def _draw_task_sidebar(
+    d: ImageDraw.ImageDraw,
+    tasks: list[Task],
+    box: tuple[float, float, float, float],
+    today: date,
+    fonts: dict[str, ImageFont.ImageFont],
+) -> None:
+    """Pending Google Tasks in a narrow column: due date, then title."""
+    x0, y0, x1, y1 = box
+    d.rectangle([x0, y0, x1, y1], outline=0, width=1, fill=250)
+    d.rectangle([x0, y0, x1, y0 + 30], fill=0)
+    d.text(((x0 + x1) / 2, y0 + 6), "TAREAS", font=fonts["head"], fill=255, anchor="ma")
+
+    y = y0 + 40
+    inner_w = x1 - x0 - 16
+    max_c = max(8, int(inner_w / 7))
+    for t in tasks:
+        if y > y1 - 34:
+            break
+        if t.due:
+            if t.due < today:
+                when = "atrasada"
+            elif t.due == today:
+                when = "hoy"
+            else:
+                when = t.due.strftime("%d/%m")
+        else:
+            when = "sin fecha"
+        d.rectangle([x0 + 8, y + 3, x0 + 18, y + 13], outline=0, width=1)
+        d.text((x0 + 24, y - 1), when, font=fonts["meta"], fill=0)
+        y += 16
+        title = t.title
+        if len(title) > max_c:
+            title = title[: max_c - 2] + ".."
+        d.text((x0 + 24, y), title, font=fonts["task"], fill=0)
+        y += 22
+        d.line([x0 + 8, y - 3, x1 - 8, y - 3], fill=215, width=1)
+
+    if not tasks:
+        d.text(((x0 + x1) / 2, y), "sin pendientes", font=fonts["meta"], fill=120, anchor="ma")
+
+
+def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | None = None) -> None:
     """Weekly timetable view (kindle_schedule-style) for KUAL."""
     # png_width/height describe the screen. For a rotated view the layout is
     # drawn sideways and rotated back at save time, so swap them here.
@@ -406,6 +511,13 @@ def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
     grid_bottom = h - footer_h - 8
     grid_left = margin_l
     grid_right = w - margin_r
+
+    tasks = tasks or []
+    sidebar_w = 0.0
+    if tasks:
+        sidebar_w = max(150.0, min(215.0, w * 0.21))
+        grid_right -= sidebar_w + 10
+
     grid_w = grid_right - grid_left
     col_w = grid_w / n_days
 
@@ -526,6 +638,15 @@ def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
                         note = note[: max_c - 2] + ".."
                     d.text((tx, ty), note, font=f_meta, fill=ink)
 
+    if sidebar_w:
+        _draw_task_sidebar(
+            d,
+            tasks,
+            (w - margin_r - sidebar_w, margin_t, w - margin_r, grid_bottom),
+            start,
+            {"head": f_foot, "task": f_chip, "meta": f_meta},
+        )
+
     # Footer exit
     d.rectangle([0, h - footer_h, w, h], fill=0)
     d.text((w // 2, h - footer_h + 18), "SALIR", font=f_foot, fill=255, anchor="ma")
@@ -640,6 +761,7 @@ def write_ci_config(path: Path) -> None:
         raise SystemExit("Set ICS_URL or ICS_URLS env var for CI")
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
+    extras = os.environ.get("EXTRAS_URL", "").strip()
     # Must match the framebuffer fbink reports. PW1/PW2 = 758x1024,
     # Touch/K4 = 600x800, PW3/PW4 = 1072x1448.
     png_w = os.environ.get("PNG_WIDTH", "758")
@@ -658,6 +780,7 @@ def write_ci_config(path: Path) -> None:
         'output = "output/calendar.pdf"',
         'png_output = "output/calendar.png"',
         "insecure_ssl = false",
+        f'extras_url = "{extras.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"',
         "[screen]",
         "width_in = 3.58",
         "height_in = 4.82",
@@ -709,7 +832,9 @@ def main() -> None:
     end = start + timedelta(days=cfg.days + 40)
     events = collect_events(cal, start, end, tz)
     print(f"Parsed {len(events)} event instances in window.")
-    draw_png(cfg, events, start)
+    tasks, birthdays = fetch_extras(cfg)
+    events.extend(birthdays)
+    draw_png(cfg, events, start, tasks)
     print(f"Wrote {cfg.png_output}")
     draw_pdf(cfg, events, start)
     print(f"Wrote {cfg.output}")
