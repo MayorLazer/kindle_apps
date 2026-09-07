@@ -141,6 +141,23 @@ class TestDrawPng(unittest.TestCase):
         generate.draw_png(cfg, [], self.monday, [], [])
         self.assertTrue(cfg.png_output.is_file())
 
+    def test_all_task_groups_render(self) -> None:
+        """Overdue / today / upcoming take different row layouts."""
+        cfg = make_config(self.tmp)
+        tasks = [
+            Task("Vencida", self.monday - timedelta(days=5), ""),
+            Task("De hoy", self.monday, ""),
+            Task("Futura", self.monday + timedelta(days=30), ""),
+        ]
+        generate.draw_png(cfg, [], self.monday, tasks, [])
+        self.assertTrue(cfg.png_output.is_file())
+
+    def test_long_task_list_is_capped(self) -> None:
+        cfg = make_config(self.tmp)
+        tasks = [Task(f"Tarea {i}", self.monday + timedelta(days=i), "") for i in range(80)]
+        generate.draw_png(cfg, [], self.monday, tasks, [])
+        self.assertTrue(cfg.png_output.is_file())
+
 
 class TestBirthdayBox(unittest.TestCase):
     def test_height_grows_per_row(self) -> None:

@@ -468,6 +468,10 @@ def _fit_text(text: str, font: ImageFont.ImageFont, max_w: float) -> str:
     return (text[:lo] + ell) if lo else ell
 
 
+TASK_ROW_H = 17
+TASK_HEAD_H = 16
+
+
 def _draw_task_sidebar(
     d: ImageDraw.ImageDraw,
     tasks: list[Task],
@@ -475,43 +479,54 @@ def _draw_task_sidebar(
     today: date,
     fonts: dict[str, ImageFont.ImageFont],
 ) -> None:
-    """Pending Google Tasks in a narrow column: due date, then title."""
+    """Pending Google Tasks grouped by due state.
+
+    Overdue and today's tasks sit under one heading each, so the sidebar does
+    not repeat "atrasada" on every row; only upcoming rows need a date.
+    """
     x0, y0, x1, y1 = box
     d.rectangle([x0, y0, x1, y1], outline=0, width=1, fill=250)
     d.rectangle([x0, y0, x1, y0 + 28], fill=0)
     d.text(((x0 + x1) / 2, y0 + 5), "TAREAS", font=fonts["head"], fill=255, anchor="ma")
 
-    text_x = x0 + 22
-    text_w = x1 - text_x - 8
-    y = y0 + 35
-    shown = 0
-    # Leave a row free for the "+N mas" counter when the list is longer.
-    y_stop = y1 - 44
-    for t in tasks:
-        if y > y_stop:
-            break
-        if t.due is None:
-            continue
-        if t.due < today:
-            when = "atrasada"
-        elif t.due == today:
-            when = "hoy"
-        else:
-            when = t.due.strftime("%d/%m")
-        d.rectangle([x0 + 8, y + 2, x0 + 17, y + 11], outline=0, width=1)
-        d.text((text_x, y - 1), when, font=fonts["meta"], fill=90)
-        y += 13
-        d.text((text_x, y), _fit_text(t.title, fonts["task"], text_w), font=fonts["task"], fill=0)
-        y += 18
-        d.line([x0 + 8, y - 3, x1 - 8, y - 3], fill=215, width=1)
-        shown += 1
+    dated = [t for t in tasks if t.due is not None]
+    groups = [
+        ("ATRASADAS", [t for t in dated if t.due and t.due < today], False),
+        ("HOY", [t for t in dated if t.due == today], False),
+        ("PROXIMAS", [t for t in dated if t.due and t.due > today], True),
+    ]
 
-    if not tasks:
+    date_x = x0 + 8
+    title_x = x0 + 44
+    y = y0 + 33
+    # Leave a row free for the "+N mas" counter when the list is longer.
+    y_stop = y1 - 24
+    shown = 0
+
+    for label, items, dated_rows in groups:
+        if not items or y + TASK_HEAD_H + TASK_ROW_H > y_stop:
+            continue
+        d.rectangle([x0 + 1, y, x1 - 1, y + TASK_HEAD_H - 2], fill=228)
+        d.text((date_x, y + 1), label, font=fonts["meta"], fill=0)
+        y += TASK_HEAD_H
+
+        for t in items:
+            if y + TASK_ROW_H > y_stop:
+                break
+            if dated_rows and t.due:
+                d.text((date_x, y + 1), t.due.strftime("%d/%m"), font=fonts["meta"], fill=90)
+                d.text((title_x, y), _fit_text(t.title, fonts["task"], x1 - title_x - 8), font=fonts["task"], fill=0)
+            else:
+                d.text((date_x, y), _fit_text(t.title, fonts["task"], x1 - date_x - 8), font=fonts["task"], fill=0)
+            y += TASK_ROW_H
+            shown += 1
+
+    if not dated:
         d.text(((x0 + x1) / 2, y), "sin pendientes", font=fonts["meta"], fill=120, anchor="ma")
-    elif shown < len(tasks):
+    elif shown < len(dated):
         d.text(
-            ((x0 + x1) / 2, y + 4),
-            f"+{len(tasks) - shown} mas",
+            ((x0 + x1) / 2, y + 2),
+            f"+{len(dated) - shown} mas",
             font=fonts["meta"],
             fill=110,
             anchor="ma",
