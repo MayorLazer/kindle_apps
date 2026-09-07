@@ -426,6 +426,21 @@ def _assign_lanes(day_events: list[Ev]) -> dict[int, tuple[int, int]]:
     return {i: (assigned[i], max_lane) for i in assigned}
 
 
+def _fit_text(text: str, font: ImageFont.ImageFont, max_w: float) -> str:
+    """Truncate to the real rendered width, so text never runs past its box."""
+    if font.getlength(text) <= max_w:
+        return text
+    ell = ".."
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if font.getlength(text[:mid] + ell) <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return (text[:lo] + ell) if lo else ell
+
+
 def _draw_task_sidebar(
     d: ImageDraw.ImageDraw,
     tasks: list[Task],
@@ -436,14 +451,17 @@ def _draw_task_sidebar(
     """Pending Google Tasks in a narrow column: due date, then title."""
     x0, y0, x1, y1 = box
     d.rectangle([x0, y0, x1, y1], outline=0, width=1, fill=250)
-    d.rectangle([x0, y0, x1, y0 + 30], fill=0)
-    d.text(((x0 + x1) / 2, y0 + 6), "TAREAS", font=fonts["head"], fill=255, anchor="ma")
+    d.rectangle([x0, y0, x1, y0 + 28], fill=0)
+    d.text(((x0 + x1) / 2, y0 + 5), "TAREAS", font=fonts["head"], fill=255, anchor="ma")
 
-    y = y0 + 40
-    inner_w = x1 - x0 - 16
-    max_c = max(8, int(inner_w / 7))
+    text_x = x0 + 22
+    text_w = x1 - text_x - 8
+    y = y0 + 35
+    shown = 0
+    # Leave a row free for the "+N mas" counter when the list is longer.
+    y_stop = y1 - 44
     for t in tasks:
-        if y > y1 - 34:
+        if y > y_stop:
             break
         if t.due:
             if t.due < today:
@@ -454,21 +472,33 @@ def _draw_task_sidebar(
                 when = t.due.strftime("%d/%m")
         else:
             when = "sin fecha"
-        d.rectangle([x0 + 8, y + 3, x0 + 18, y + 13], outline=0, width=1)
-        d.text((x0 + 24, y - 1), when, font=fonts["meta"], fill=0)
-        y += 16
-        title = t.title
-        if len(title) > max_c:
-            title = title[: max_c - 2] + ".."
-        d.text((x0 + 24, y), title, font=fonts["task"], fill=0)
-        y += 22
+        d.rectangle([x0 + 8, y + 2, x0 + 17, y + 11], outline=0, width=1)
+        d.text((text_x, y - 1), when, font=fonts["meta"], fill=90)
+        y += 13
+        d.text((text_x, y), _fit_text(t.title, fonts["task"], text_w), font=fonts["task"], fill=0)
+        y += 18
         d.line([x0 + 8, y - 3, x1 - 8, y - 3], fill=215, width=1)
+        shown += 1
 
     if not tasks:
         d.text(((x0 + x1) / 2, y), "sin pendientes", font=fonts["meta"], fill=120, anchor="ma")
+    elif shown < len(tasks):
+        d.text(
+            ((x0 + x1) / 2, y + 4),
+            f"+{len(tasks) - shown} mas",
+            font=fonts["meta"],
+            fill=110,
+            anchor="ma",
+        )
 
 
-def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | None = None) -> None:
+def draw_png(
+    cfg: Config,
+    events: list[Ev],
+    start: date,
+    tasks: list[Task] | None = None,
+    birthdays: list[Ev] | None = None,
+) -> None:
     """Weekly timetable view (kindle_schedule-style) for KUAL."""
     # png_width/height describe the screen. For a rotated view the layout is
     # drawn sideways and rotated back at save time, so swap them here.
@@ -484,6 +514,7 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
     margin_r = 16
     margin_t = 16
     header_h = 70
+    margin_l = 40 if (cfg.end_hour - cfg.start_hour) > 16 else margin_l
     allday_h = 0
 
     f_day = pil_fonts(20, bold=True)
@@ -494,6 +525,8 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
     f_chip = pil_fonts(13, bold=True)
     f_foot = pil_fonts(18, bold=True)
     f_hint = pil_fonts(15, bold=False)
+    f_task = pil_fonts(12, bold=True)
+    f_task_meta = pil_fonts(11, bold=False)
 
     # Week starts Monday of current week
     week_start = start - timedelta(days=start.weekday())
@@ -527,6 +560,15 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
         end_h = start_h + 12
     hours = end_h - start_h
     hour_h = (grid_bottom - grid_top) / hours
+
+    # A 24h day leaves ~25px per row, so scale the hour gutter to fit.
+    if hour_h >= 32:
+        f_hour = pil_fonts(16, bold=False)
+    elif hour_h >= 22:
+        f_hour = pil_fonts(13, bold=False)
+    else:
+        f_hour = pil_fonts(11, bold=False)
+    label_every = 1 if hour_h >= 15 else 2
 
     def y_for(dt: datetime) -> float:
         mins = (dt.hour - start_h) * 60 + dt.minute
@@ -564,7 +606,7 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
         y = grid_top + hi * hour_h
         shade = 180 if hi % 2 == 0 else 210
         d.line([grid_left, y, grid_right, y], fill=shade, width=1)
-        if hi < hours:
+        if hi < hours and hi % label_every == 0:
             d.text((margin_l - 8, y - 2), f"{hour:02d}", font=f_hour, fill=0, anchor="rm")
 
     # Vertical day separators
@@ -584,7 +626,11 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
             end_dt = e.end if isinstance(e.end, datetime) else e.start + timedelta(hours=1)
             # clamp to visible window
             win_start = datetime.combine(day, time(start_h, 0), tzinfo=e.start.tzinfo)
-            win_end = datetime.combine(day, time(end_h, 0), tzinfo=e.start.tzinfo)
+            if end_h >= 24:
+                # A full day ends at midnight of the next date; time(24) is invalid.
+                win_end = datetime.combine(day + timedelta(days=1), time(0, 0), tzinfo=e.start.tzinfo)
+            else:
+                win_end = datetime.combine(day, time(end_h, 0), tzinfo=e.start.tzinfo)
             s = max(e.start, win_start)
             en = min(end_dt, win_end)
             if en <= s:
@@ -644,16 +690,35 @@ def draw_png(cfg: Config, events: list[Ev], start: date, tasks: list[Task] | Non
             tasks,
             (w - margin_r - sidebar_w, margin_t, w - margin_r, grid_bottom),
             start,
-            {"head": f_foot, "task": f_chip, "meta": f_meta},
+            {"head": f_foot, "task": f_task, "meta": f_task_meta},
         )
 
-    # Footer exit
+    # Footer: exit hint, plus upcoming birthdays (usually outside this week)
     d.rectangle([0, h - footer_h, w, h], fill=0)
-    d.text((w // 2, h - footer_h + 18), "SALIR", font=f_foot, fill=255, anchor="ma")
+    d.text((w // 2, h - footer_h + 8), "SALIR", font=f_foot, fill=255, anchor="ma")
+
+    upcoming = sorted(birthdays or [], key=lambda e: e.start)[:3]
+    if upcoming:
+        parts = []
+        for e in upcoming:
+            name = e.summary[7:] if e.summary.startswith("Cumple ") else e.summary
+            parts.append(f"{name} {e.start.strftime('%d/%m')}")
+        line = "Cumples: " + "  -  ".join(parts)
+        d.text(
+            (w // 2, h - footer_h + 32),
+            _fit_text(line, f_hint, w - 40),
+            font=f_hint,
+            fill=255,
+            anchor="ma",
+        )
+        hint_y = h - footer_h + 52
+    else:
+        hint_y = h - footer_h + 36
+
     d.text(
-        (w // 2, h - footer_h + 44),
+        (w // 2, hint_y),
         "Toca la pantalla o boton power",
-        font=f_hint,
+        font=f_task_meta if upcoming else f_hint,
         fill=255,
         anchor="ma",
     )
@@ -774,9 +839,9 @@ def write_ci_config(path: Path) -> None:
         "]",
         f'timezone = "{tz}"',
         f"days = {days}",
-        "schedule_days = 5",
-        "start_hour = 8",
-        "end_hour = 22",
+        f"schedule_days = {os.environ.get('SCHEDULE_DAYS', '5')}",
+        f"start_hour = {os.environ.get('START_HOUR', '0')}",
+        f"end_hour = {os.environ.get('END_HOUR', '24')}",
         'output = "output/calendar.pdf"',
         'png_output = "output/calendar.png"',
         "insecure_ssl = false",
@@ -839,7 +904,7 @@ def main() -> None:
     print(f"Parsed {len(events)} event instances in window.")
     tasks, birthdays = fetch_extras(cfg)
     events.extend(birthdays)
-    draw_png(cfg, events, start, tasks)
+    draw_png(cfg, events, start, tasks, birthdays)
     print(f"Wrote {cfg.png_output}")
     draw_pdf(cfg, events, start)
     print(f"Wrote {cfg.output}")

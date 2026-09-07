@@ -7,10 +7,10 @@ ics_urls = [
 timezone = "America/Argentina/Buenos_Aires"
 days = 14
 
-# Weekly timetable PNG (KUAL view)
+# Weekly timetable PNG (KUAL view). 0..24 = full day.
 schedule_days = 5
-start_hour = 8
-end_hour = 22
+start_hour = 0
+end_hour = 24
 
 output = "output/calendar.pdf"
 png_output = "output/calendar.png"
