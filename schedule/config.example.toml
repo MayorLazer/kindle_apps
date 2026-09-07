@@ -12,6 +12,12 @@ schedule_days = 5
 start_hour = 0
 end_hour = 24
 
+# Shrink empty hours outside the core band, so daytime rows stay readable
+# on a 24h grid. An hour holding an event always keeps its full height.
+compress_night = true
+core_start_hour = 7
+core_end_hour = 23
+
 output = "output/calendar.pdf"
 png_output = "output/calendar.png"
 insecure_ssl = false

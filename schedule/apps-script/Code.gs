@@ -27,9 +27,9 @@ var SHARED_SECRET = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 // How far ahead to report birthdays.
 var BIRTHDAY_DAYS_AHEAD = 45;
 
-// Skip tasks due further out than this. 0 disables the limit.
-// Tasks with no due date are never reported.
-var TASK_DAYS_AHEAD = 30;
+// Skip tasks due further out than this. 0 = no limit, report every upcoming
+// task. Overdue tasks are always reported; undated ones never are.
+var TASK_DAYS_AHEAD = 0;
 
 function doGet(e) {
   var token = (e && e.parameter && e.parameter.token) || '';

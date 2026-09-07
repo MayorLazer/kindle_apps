@@ -83,6 +83,11 @@ class Config:
     page_height_in: float
     insecure_ssl: bool
     extras_url: str = ""
+    # On a 24h grid, empty hours outside core_start_hour..core_end_hour get a
+    # short row so the daytime rows can breathe.
+    compress_night: bool = True
+    core_start_hour: int = 7
+    core_end_hour: int = 23
 
 
 @dataclass
@@ -135,6 +140,9 @@ def load_config(path: Path) -> Config:
         page_height_in=float(screen.get("height_in", 4.82)),
         insecure_ssl=bool(data.get("insecure_ssl", False)),
         extras_url=str(data.get("extras_url", "")).strip(),
+        compress_night=bool(data.get("compress_night", True)),
+        core_start_hour=int(data.get("core_start_hour", 7)),
+        core_end_hour=int(data.get("core_end_hour", 23)),
     )
 
 
@@ -560,21 +568,55 @@ def draw_png(
     if end_h <= start_h:
         end_h = start_h + 12
     hours = end_h - start_h
-    hour_h = (grid_bottom - grid_top) / hours
 
-    # A 24h day leaves ~25px per row, so scale the hour gutter to fit.
-    if hour_h >= 32:
+    # Which hours of the week hold a timed event; those always keep a full row.
+    busy_hours: set[int] = set()
+    for day in days:
+        for e in events_on_day(events, day):
+            if e.all_day or not isinstance(e.start, datetime):
+                continue
+            e_end = e.end if isinstance(e.end, datetime) else e.start + timedelta(hours=1)
+            first = e.start.hour if e.start.date() == day else start_h
+            last = e_end.hour if e_end.date() == day else end_h
+            if e_end.minute == 0 and e_end > e.start:
+                last -= 1  # an event ending at 10:00 does not occupy hour 10
+            for hour in range(max(start_h, first), min(end_h - 1, last) + 1):
+                busy_hours.add(hour)
+
+    # Empty night hours shrink to NIGHT_ROW of a normal row.
+    NIGHT_ROW = 0.42
+    row_w: list[float] = []
+    for hi in range(hours):
+        hour = start_h + hi
+        core = cfg.core_start_hour <= hour < cfg.core_end_hour
+        if not cfg.compress_night or core or hour in busy_hours:
+            row_w.append(1.0)
+        else:
+            row_w.append(NIGHT_ROW)
+
+    unit = (grid_bottom - grid_top) / sum(row_w)
+    row_y = [grid_top]
+    for wt in row_w:
+        row_y.append(row_y[-1] + wt * unit)
+
+    # Scale the hour gutter to whatever height a normal row ended up with.
+    if unit >= 32:
         f_hour = pil_fonts(16, bold=False)
-    elif hour_h >= 22:
+    elif unit >= 22:
         f_hour = pil_fonts(13, bold=False)
     else:
         f_hour = pil_fonts(11, bold=False)
-    label_every = 1 if hour_h >= 15 else 2
+    f_hour_small = pil_fonts(10, bold=False)
+    label_every = 1 if unit >= 15 else 2
 
-    def y_for(dt: datetime) -> float:
-        mins = (dt.hour - start_h) * 60 + dt.minute
-        mins = max(0, min(hours * 60, mins))
-        return grid_top + (mins / 60.0) * hour_h
+    def y_for(dt: datetime, day: date) -> float:
+        """Map a time to its pixel row, honouring the compressed night rows."""
+        day_top = datetime.combine(day, time(start_h, 0), tzinfo=dt.tzinfo)
+        mins = (dt - day_top).total_seconds() / 60.0
+        mins = max(0.0, min(hours * 60.0, mins))
+        hi = min(hours - 1, int(mins // 60))
+        frac = (mins - hi * 60) / 60.0
+        return row_y[hi] + frac * (row_y[hi + 1] - row_y[hi])
 
     # Day headers
     for i, day in enumerate(days):
@@ -600,13 +642,23 @@ def draw_png(
                 d.text((x + col_w / 2, cy + 3), txt, font=f_chip, fill=0, anchor="ma")
                 cy += 26
 
-    # Hour lines + labels
+    # Hour lines + labels. Compressed rows get a tint so the jump is visible.
+    for hi in range(hours):
+        if row_w[hi] < 1.0:
+            d.rectangle([grid_left, row_y[hi], grid_right, row_y[hi + 1]], fill=243)
     for hi in range(hours + 1):
         hour = start_h + hi
-        y = grid_top + hi * hour_h
+        y = row_y[hi]
         shade = 180 if hi % 2 == 0 else 210
         d.line([grid_left, y, grid_right, y], fill=shade, width=1)
-        if hi < hours and hi % label_every == 0:
+        if hi >= hours:
+            continue
+        row_h = row_y[hi + 1] - y
+        if row_h < 9:
+            continue
+        if row_w[hi] < 1.0:
+            d.text((margin_l - 8, y - 1), f"{hour:02d}", font=f_hour_small, fill=90, anchor="rm")
+        elif hi % label_every == 0:
             d.text((margin_l - 8, y - 2), f"{hour:02d}", font=f_hour, fill=0, anchor="rm")
 
     # Vertical day separators
@@ -643,8 +695,8 @@ def draw_png(
             lane_w = inner_w / lane_count
             x0 = col_x0 + pad + lane * lane_w
             x1 = x0 + lane_w - 2
-            y0 = y_for(s)
-            y1 = y_for(en)
+            y0 = y_for(s, day)
+            y1 = y_for(en, day)
             if y1 - y0 < 22:
                 y1 = y0 + 22
             box = [x0, y0, x1, y1]
@@ -842,6 +894,9 @@ def write_ci_config(path: Path) -> None:
         f"schedule_days = {os.environ.get('SCHEDULE_DAYS', '5')}",
         f"start_hour = {os.environ.get('START_HOUR', '0')}",
         f"end_hour = {os.environ.get('END_HOUR', '24')}",
+        f"compress_night = {os.environ.get('COMPRESS_NIGHT', 'true').lower()}",
+        f"core_start_hour = {os.environ.get('CORE_START_HOUR', '7')}",
+        f"core_end_hour = {os.environ.get('CORE_END_HOUR', '23')}",
         'output = "output/calendar.pdf"',
         'png_output = "output/calendar.png"',
         "insecure_ssl = false",
