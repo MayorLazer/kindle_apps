@@ -2,3 +2,6 @@ config
 cache/
 *.png
 *.log
+curl
+curl-armhf
+curl-armv7

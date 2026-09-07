@@ -112,7 +112,9 @@ function Copy-ToKindlePaths {
     # Refresh scripts (LF-safe copy from repo)
     $srcBin = Join-Path $RepoRoot "extensions\calendar\bin"
     if (Test-Path $srcBin) {
-      Copy-Item -Force (Join-Path $srcBin "*") (Join-Path $extDir "bin\")
+      Get-ChildItem -Path $srcBin -File | Where-Object { $_.Name -ne "config" } | ForEach-Object {
+        Copy-Item -Force $_.FullName (Join-Path $extDir "bin\$($_.Name)")
+      }
       Copy-Item -Force (Join-Path $RepoRoot "extensions\calendar\menu.json") $extDir
       Copy-Item -Force (Join-Path $RepoRoot "extensions\calendar\config.xml") $extDir
     }

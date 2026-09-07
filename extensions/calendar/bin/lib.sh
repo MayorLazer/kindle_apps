@@ -24,14 +24,65 @@ load_config() {
 	: "${CALENDAR_URL:=}"
 	: "${WGET_INSECURE:=1}"
 	: "${FBINK:=/mnt/us/libkh/bin/fbink}"
+	: "${CURL:=}"
 	FBINK=$(echo "${FBINK}" | tr -d '\r')
 	CALENDAR_URL=$(echo "${CALENDAR_URL}" | tr -d '\r')
+	CURL=$(echo "${CURL}" | tr -d '\r')
 
 	if [ ! -f "${FBINK}" ]; then
 		for c in /mnt/us/libkh/bin/fbink /mnt/us/extensions/MRInstaller/bin/K5/fbink; do
 			[ -f "$c" ] && FBINK="$c" && break
 		done
 	fi
+
+	if [ -z "${CURL}" ] || [ ! -f "${CURL}" ]; then
+		CURL=""
+		for c in \
+			"${BIN}/curl" \
+			/mnt/us/usbnet/bin/curl \
+			/mnt/us/libkh/bin/curl \
+			/mnt/us/extensions/MRInstaller/bin/K5/curl \
+			/usr/bin/curl; do
+			# vfat often has no reliable +x bit — test -f only
+			if [ -f "$c" ]; then
+				CURL="$c"
+				break
+			fi
+		done
+	fi
+}
+
+# PW4 stock BusyBox 1.17 wget: only -csq -O -P -U -Y; HTTP/FTP only (no HTTPS,
+# no -T, no --no-check-certificate). Prefer curl for https:// URLs.
+download_url() {
+	_url="$1"
+	_out="$2"
+	rm -f "${_out}"
+
+	case "${_url}" in
+		https://*)
+			if [ -n "${CURL}" ] && [ -f "${CURL}" ]; then
+				log "download: curl ${CURL} ${_url}"
+				if "${CURL}" -k -sS -L --fail -A "KindleCalendar/1.0" -o "${_out}" "${_url}" >> "${LOG}" 2>&1 \
+					&& [ -s "${_out}" ]; then
+					return 0
+				fi
+				log "download: curl failed"
+			else
+				log "download: https needs curl (BusyBox wget has no SSL)"
+			fi
+			;;
+	esac
+
+	log "download: wget -O ${_out} ${_url}"
+	# Flags must stay compatible with BusyBox 1.17.1 (Kindle PW4).
+	if wget -q -U "KindleCalendar/1.0" -O "${_out}" "${_url}" >> "${LOG}" 2>&1 \
+		&& [ -s "${_out}" ]; then
+		return 0
+	fi
+	log "download: wget failed"
+	rm -f "${_out}"
+	return 1
 }
 
 find_image() {
@@ -44,11 +95,30 @@ find_image() {
 	return 1
 }
 
-# PNG magic: 89 50 4E 47
+# PNG magic: 89 'P' 'N' 'G'. BusyBox od/dd flags vary, so try a few probes and
+# treat "cannot determine" as OK rather than rejecting a good download.
 is_png() {
 	[ -f "$1" ] || return 1
-	_od=$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')
-	[ "${_od}" = "89504e47" ]
+
+	# Bytes 2-4 are the ASCII letters PNG.
+	_sig=$(dd if="$1" bs=1 skip=1 count=3 2>/dev/null)
+	if [ -n "${_sig}" ]; then
+		[ "${_sig}" = "PNG" ] && return 0
+		log "is_png: sig='${_sig}' for $1"
+		return 1
+	fi
+
+	_hex=$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \t\n')
+	if [ -n "${_hex}" ]; then
+		case "${_hex}" in
+			89504e47*) return 0 ;;
+		esac
+		log "is_png: hex='${_hex}' for $1"
+		return 1
+	fi
+
+	log "is_png: no dd/od probe available, accepting $1"
+	return 0
 }
 
 wifi_on() {

@@ -114,19 +114,42 @@ With the Kindle on USB:
 
 ### 2. Edit Kindle `bin/config`
 
+**Important:** PW4 stock `wget` is BusyBox **1.17** — **no HTTPS**, and it rejects
+`--no-check-certificate` / `-T`. GitHub Pages URLs need **curl** (USBNet) or plain **HTTP**.
+
+**Option A — USBNet curl + GitHub Pages**
+
 ```sh
 CALENDAR_URL="https://YOURUSER.github.io/kindle_apps/calendar.png"
-WGET_INSECURE=1
+CURL="/mnt/us/usbnet/bin/curl"
 FBINK="/mnt/us/libkh/bin/fbink"
 ```
 
-Prefer the slug URL if you set `PUBLISH_SLUG`.
+**Option B — PC HTTP server (no curl)**
+
+On the PC (same Wi‑Fi as the Kindle):
+
+```powershell
+cd d:\Apps\kindle_apps\schedule
+powershell -ExecutionPolicy Bypass -File .\serve-http.ps1 -FetchFromPages
+```
+
+Then set the printed URL on the Kindle, e.g.:
+
+```sh
+CALENDAR_URL="http://192.168.1.10:8765/calendar.png"
+FBINK="/mnt/us/libkh/bin/fbink"
+```
+
+**Option C — USB/SCP only**
+
+Copy `calendar.png` with `sync.ps1` / USB, then **Mostrar (cache)** — no download.
 
 Requirements on the Kindle:
 
 - Jailbreak + **KUAL**
 - **FBInk** at `/mnt/us/libkh/bin/fbink` (or change `FBINK=`)
-- Wi‑Fi working when you tap **Actualizar**
+- For **Actualizar** over GitHub HTTPS: USBNet **curl**, or use Option B/C
 
 ### 3. Use it
 

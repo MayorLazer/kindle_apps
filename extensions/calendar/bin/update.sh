@@ -1,6 +1,9 @@
 #!/bin/sh
-# Fetch latest calendar.png from GitHub Pages (or any URL), then display.
+# Fetch latest calendar.png, then display.
 # Wi-Fi is enabled only for the download, then turned off. No background loop.
+#
+# Note: stock Kindle BusyBox wget (1.17) cannot do HTTPS. For GitHub Pages use
+# curl (USBNet: /mnt/us/usbnet/bin/curl) or an http:// LAN URL (serve-http.ps1).
 
 EXT="/mnt/us/extensions/calendar"
 # shellcheck disable=SC1091
@@ -17,27 +20,39 @@ if [ -z "${CALENDAR_URL}" ] || echo "${CALENDAR_URL}" | grep -q REPLACE; then
 	exit 1
 fi
 
+case "${CALENDAR_URL}" in
+	https://*)
+		if [ -z "${CURL}" ] || [ ! -f "${CURL}" ]; then
+			/usr/sbin/eips 2 3 "HTTPS: falta curl" 2>/dev/null
+			/usr/sbin/eips 2 5 "USBNet curl o http://" 2>/dev/null
+			log "update: https URL but no curl; BusyBox wget cannot SSL"
+			_img=$(find_image)
+			if [ -n "${_img}" ]; then
+				/usr/sbin/eips 2 7 "Mostrando cache" 2>/dev/null
+				sleep 1
+				display_image "${_img}"
+				exit 0
+			fi
+			/usr/sbin/eips 2 7 "Sin imagen" 2>/dev/null
+			exit 1
+		fi
+		;;
+esac
+
 /usr/sbin/eips 1 2 "wifi..." 2>/dev/null
 if ! wifi_on; then
 	/usr/sbin/eips 2 3 "Sin Wi-Fi" 2>/dev/null
 	log "update: wifi failed"
-	# still try to show cache
 	_img=$(find_image) && display_image "${_img}"
 	exit 1
 fi
 
 _tmp="${CACHE}/download.png"
-rm -f "${_tmp}"
-_flags="-T 45 -U KindleCalendar/1.0 -O"
-if [ "${WGET_INSECURE}" = "1" ]; then
-	_flags="-T 45 --no-check-certificate -U KindleCalendar/1.0 -O"
-fi
-
 /usr/sbin/eips 1 2 "descargando..." 2>/dev/null
-log "update: wget ${CALENDAR_URL}"
-# shellcheck disable=SC2086
-if wget ${_flags} "${_tmp}" "${CALENDAR_URL}" >> "${LOG}" 2>&1 \
-	&& [ -s "${_tmp}" ]; then
+log "update: fetch ${CALENDAR_URL}"
+
+_ok=0
+if download_url "${CALENDAR_URL}" "${_tmp}"; then
 	_sz=$(wc -c < "${_tmp}" 2>/dev/null | tr -cd '0-9')
 	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ] && is_png "${_tmp}"; then
 		mv "${_tmp}" "${IMG}"
@@ -45,14 +60,10 @@ if wget ${_flags} "${_tmp}" "${CALENDAR_URL}" >> "${LOG}" 2>&1 \
 		log "update: ok bytes=${_sz}"
 		_ok=1
 	else
-		log "update: bad download bytes=${_sz:-0} (need png >500B)"
+		log "update: rejected download bytes=${_sz:-0}"
+		od -An -tx1 -N8 "${_tmp}" >> "${LOG}" 2>&1
 		rm -f "${_tmp}"
-		_ok=0
 	fi
-else
-	log "update: wget failed"
-	_ok=0
-	rm -f "${_tmp}"
 fi
 wifi_off
 
@@ -72,4 +83,9 @@ if [ -n "${_img}" ]; then
 fi
 
 /usr/sbin/eips 2 5 "Sin imagen" 2>/dev/null
+case "${CALENDAR_URL}" in
+	https://*)
+		/usr/sbin/eips 2 7 "Pon curl o http://" 2>/dev/null
+		;;
+esac
 exit 1
