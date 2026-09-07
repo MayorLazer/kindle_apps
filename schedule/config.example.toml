@@ -1,7 +1,9 @@
 # Copy to config.toml and edit. Never commit real ICS URLs.
 
-# Public feeds can be added here too, e.g. Argentina holidays:
-#   "https://calendar.google.com/calendar/ical/en-gb.ar.official%23holiday%40group.v.calendar.google.com/public/basic.ics"
+# Public feeds can be added here too. The "es" / "en-gb" prefix picks the
+# language of the holiday names, which is handy to tell countries apart:
+#   "https://calendar.google.com/calendar/ical/es.ar%23holiday%40group.v.calendar.google.com/public/basic.ics"
+#   "https://calendar.google.com/calendar/ical/en-gb.usa%23holiday%40group.v.calendar.google.com/public/basic.ics"
 ics_urls = [
   "https://calendar.google.com/calendar/ical/REPLACE/private-REPLACE/basic.ics",
 ]

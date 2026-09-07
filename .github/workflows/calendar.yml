@@ -63,8 +63,11 @@ jobs:
           fi
           export TIMEZONE="${TIMEZONE:-America/Argentina/Buenos_Aires}"
           export CALENDAR_DAYS="${CALENDAR_DAYS:-14}"
-          # Public, non-secret feeds. Default: Argentina holidays.
-          export ICS_URLS_PUBLIC="${ICS_URLS_PUBLIC:-https://calendar.google.com/calendar/ical/en-gb.ar.official%23holiday%40group.v.calendar.google.com/public/basic.ics}"
+          # Public, non-secret feeds, "|" separated. Argentina in Spanish and
+          # USA in English, so the name's language tells the countries apart.
+          AR_HOLIDAYS="https://calendar.google.com/calendar/ical/es.ar%23holiday%40group.v.calendar.google.com/public/basic.ics"
+          US_HOLIDAYS="https://calendar.google.com/calendar/ical/en-gb.usa%23holiday%40group.v.calendar.google.com/public/basic.ics"
+          export ICS_URLS_PUBLIC="${ICS_URLS_PUBLIC:-${AR_HOLIDAYS}|${US_HOLIDAYS}}"
           # Framebuffer size per fbink; PW3/PW4 would be 1072x1448.
           export PNG_WIDTH="${PNG_WIDTH:-758}"
           export PNG_HEIGHT="${PNG_HEIGHT:-1024}"
