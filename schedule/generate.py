@@ -1,4 +1,4 @@
-# /// script
+﻿# /// script
 # requires-python = ">=3.11"
 # dependencies = [
 #   "icalendar>=6.0.0",
@@ -821,12 +821,17 @@ def main() -> None:
     blobs: list[bytes] = []
     if cfg.ics_urls:
         print(f"Fetching {len(cfg.ics_urls)} calendar URL(s)...")
-        blobs.extend(fetch_ics(u, cfg.insecure_ssl) for u in cfg.ics_urls)
+        for i, u in enumerate(cfg.ics_urls, 1):
+            try:
+                blobs.append(fetch_ics(u, cfg.insecure_ssl))
+            except Exception as exc:  # noqa: BLE001 - one bad feed must not stop the build
+                # Don't log the URL: it is a secret address.
+                print(f"WARNING: calendar #{i} failed ({exc}). Check that secret iCal URL.")
     for f in cfg.ics_files:
         print(f"Reading {f}...")
         blobs.append(f.read_bytes())
     if not blobs:
-        raise SystemExit("No calendar data")
+        raise SystemExit("No calendar data: every ICS source failed. Check ICS_URL / ICS_URLS.")
     cal = merge_calendars(blobs)
     start = date.today()
     end = start + timedelta(days=cfg.days + 40)
