@@ -25,6 +25,8 @@ load_config() {
 	: "${WGET_INSECURE:=1}"
 	: "${FBINK:=/mnt/us/libkh/bin/fbink}"
 	: "${CURL:=}"
+	# Safety net: restore the UI even if no exit event ever arrives.
+	: "${EXIT_TIMEOUT_MIN:=120}"
 	FBINK=$(echo "${FBINK}" | tr -d '\r')
 	CALENDAR_URL=$(echo "${CALENDAR_URL}" | tr -d '\r')
 	CURL=$(echo "${CURL}" | tr -d '\r')

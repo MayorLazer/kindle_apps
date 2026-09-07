@@ -76,6 +76,7 @@ class Config:
     png_output: Path
     png_width: int
     png_height: int
+    png_rotate: int
     page_width_in: float
     page_height_in: float
     insecure_ssl: bool
@@ -124,8 +125,9 @@ def load_config(path: Path) -> Config:
         end_hour=int(data.get("end_hour", 22)),
         output=out,
         png_output=png,
-        png_width=int(screen.get("png_width", 758)),
-        png_height=int(screen.get("png_height", 1024)),
+        png_width=int(screen.get("png_width", 600)),
+        png_height=int(screen.get("png_height", 800)),
+        png_rotate=int(screen.get("png_rotate", 0)) % 360,
         page_width_in=float(screen.get("width_in", 3.58)),
         page_height_in=float(screen.get("height_in", 4.82)),
         insecure_ssl=bool(data.get("insecure_ssl", False)),
@@ -362,8 +364,13 @@ def _assign_lanes(day_events: list[Ev]) -> dict[int, tuple[int, int]]:
 
 
 def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
-    """Weekly timetable view (kindle_schedule-style) for PW4 / KUAL."""
-    w, h = cfg.png_width, cfg.png_height
+    """Weekly timetable view (kindle_schedule-style) for KUAL."""
+    # png_width/height describe the screen. For a rotated view the layout is
+    # drawn sideways and rotated back at save time, so swap them here.
+    if cfg.png_rotate in (90, 270):
+        w, h = cfg.png_height, cfg.png_width
+    else:
+        w, h = cfg.png_width, cfg.png_height
     img = Image.new("L", (w, h), 255)
     d = ImageDraw.Draw(img)
 
@@ -500,12 +507,16 @@ def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
             ty = y0 + 4
             title = e.summary
             max_c = max(6, int((x1 - x0) / 9))
+            when = f"{e.start.strftime('%H:%M')} - {end_dt.strftime('%H:%M')}"
+            # Short boxes (landscape rows) have no second line, so lead with the time.
+            room_for_time = y1 - y0 >= 40
+            if not room_for_time:
+                title = f"{e.start.strftime('%H:%M')} {title}"
             if len(title) > max_c:
                 title = title[: max_c - 2] + ".."
             d.text((tx, ty), title, font=f_title, fill=ink)
             ty += 18
-            if y1 - y0 >= 40:
-                when = f"{e.start.strftime('%H:%M')} - {end_dt.strftime('%H:%M')}"
+            if room_for_time:
                 d.text((tx, ty), when, font=f_meta, fill=ink)
                 ty += 16
             if y1 - y0 >= 56:
@@ -520,13 +531,16 @@ def draw_png(cfg: Config, events: list[Ev], start: date) -> None:
     d.text((w // 2, h - footer_h + 18), "SALIR", font=f_foot, fill=255, anchor="ma")
     d.text(
         (w // 2, h - footer_h + 44),
-        "Boton power  |  KUAL > Calendario > Salir",
+        "Toca la pantalla o boton power",
         font=f_hint,
         fill=255,
         anchor="ma",
     )
 
     cfg.png_output.parent.mkdir(parents=True, exist_ok=True)
+    if cfg.png_rotate:
+        # PIL rotates counter-clockwise; 90 suits a Kindle stood on its right edge.
+        img = img.rotate(cfg.png_rotate, expand=True)
     img.save(cfg.png_output, format="PNG", optimize=True)
 
 
@@ -626,9 +640,12 @@ def write_ci_config(path: Path) -> None:
         raise SystemExit("Set ICS_URL or ICS_URLS env var for CI")
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
-    # Must match the device framebuffer. PW1/PW2 = 758x1024, PW3/PW4 = 1072x1448.
-    png_w = os.environ.get("PNG_WIDTH", "758")
-    png_h = os.environ.get("PNG_HEIGHT", "1024")
+    # Must match the visible panel. Touch/K4 = 600x800, PW1/PW2 = 758x1024,
+    # PW3/PW4 = 1072x1448.
+    png_w = os.environ.get("PNG_WIDTH", "600")
+    png_h = os.environ.get("PNG_HEIGHT", "800")
+    # 90 = landscape view for a Kindle stood on its right edge.
+    png_rot = os.environ.get("PNG_ROTATE", "90")
     lines = [
         "ics_urls = [",
         *[f'  "{u.replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34))}",' for u in urls],
@@ -646,6 +663,7 @@ def write_ci_config(path: Path) -> None:
         "height_in = 4.82",
         f"png_width = {png_w}",
         f"png_height = {png_h}",
+        f"png_rotate = {png_rot}",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")

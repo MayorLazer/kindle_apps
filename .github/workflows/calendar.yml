@@ -49,6 +49,7 @@ jobs:
           CALENDAR_DAYS: ${{ vars.CALENDAR_DAYS }}
           PNG_WIDTH: ${{ vars.PNG_WIDTH }}
           PNG_HEIGHT: ${{ vars.PNG_HEIGHT }}
+          PNG_ROTATE: ${{ vars.PNG_ROTATE }}
         run: |
           if [ -z "$ICS_URL" ] && [ -z "$ICS_URLS" ]; then
             echo "Add repository secret ICS_URL (Google Calendar secret iCal address)."
@@ -56,9 +57,11 @@ jobs:
           fi
           export TIMEZONE="${TIMEZONE:-America/Argentina/Buenos_Aires}"
           export CALENDAR_DAYS="${CALENDAR_DAYS:-14}"
-          # PW1/PW2 framebuffer. PW3/PW4 would be 1072x1448.
-          export PNG_WIDTH="${PNG_WIDTH:-758}"
-          export PNG_HEIGHT="${PNG_HEIGHT:-1024}"
+          # Visible panel size; PW3/PW4 would be 1072x1448.
+          export PNG_WIDTH="${PNG_WIDTH:-600}"
+          export PNG_HEIGHT="${PNG_HEIGHT:-800}"
+          # 90 = landscape (Kindle stood on its right edge)
+          export PNG_ROTATE="${PNG_ROTATE:-90}"
           python schedule/generate.py --from-env --config schedule/config.ci.toml
 
       - name: Stage GitHub Pages site

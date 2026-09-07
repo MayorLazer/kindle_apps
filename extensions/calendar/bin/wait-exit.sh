@@ -1,17 +1,22 @@
 #!/bin/sh
-# After calendar is on screen: wait for an exit signal, then restore UI.
-# Triggers: power button, USB plug, KUAL Salir (cache/STOP).
+# After the calendar is on screen: wait for an exit signal, then restore the UI.
 #
-# Watchers must only report when lipc-wait-event actually waited. An unsupported
-# event name returns immediately, which used to close the calendar right away.
+# The framework is frozen while the calendar shows, so touch no longer reaches
+# KUAL. Exit therefore has to come from raw input events:
+#   - any touch / button (reads /dev/input/event*)
+#   - KUAL Salir or PC rescue (cache/STOP)
+#   - lipc power event, when lipc-wait-event exists
+#   - safety timeout, so the device can never get stuck
 
 EXT="/mnt/us/extensions/calendar"
 # shellcheck disable=SC1091
 . "${EXT}/bin/lib.sh"
 load_config
 
+: "${EXIT_TIMEOUT_MIN:=120}"
+
 echo $$ > "${CACHE}/waiter.pid"
-log "wait-exit: started pid=$$"
+log "wait-exit: started pid=$$ timeout=${EXIT_TIMEOUT_MIN}min"
 
 _now() {
 	date +%s 2>/dev/null | tr -cd '0-9'
@@ -24,47 +29,43 @@ _exit_now() {
 	exit 0
 }
 
-# watch <name> <lipc source> <event>
-watch() {
-	_name="$1"
-	_src="$2"
-	_ev="$3"
+_pids=""
+
+_track() {
+	_pids="${_pids} $1"
+}
+
+# Any input event (touch, page turn, power) closes the view. One 16-byte
+# input_event record is enough; dd blocks until something happens.
+for _dev in /dev/input/event*; do
+	[ -r "${_dev}" ] || continue
+	(
+		if dd if="${_dev}" bs=16 count=1 >/dev/null 2>&1; then
+			echo "input" > "${CACHE}/exit.reason"
+		fi
+	) &
+	_track $!
+	log "wait-exit: watching ${_dev}"
+done
+
+if [ -n "${LIPC_WAIT}" ]; then
 	(
 		_t0=$(_now)
-		"${LIPC_WAIT}" "${_src}" "${_ev}" >/dev/null 2>&1
+		"${LIPC_WAIT}" com.lab126.powerd powerButtonPressed >/dev/null 2>&1
 		_rc=$?
 		_t1=$(_now)
 		if [ "${_rc}" != "0" ]; then
-			log "wait-exit: ${_name} unsupported (rc=${_rc})"
+			log "wait-exit: power watcher unsupported (rc=${_rc})"
 			exit 0
 		fi
-		# A "successful" instant return means the event source is not usable here.
 		if [ -n "${_t0}" ] && [ -n "${_t1}" ] && [ "$((_t1 - _t0))" -lt 2 ]; then
-			log "wait-exit: ${_name} returned instantly, ignoring"
+			log "wait-exit: power watcher returned instantly, ignoring"
 			exit 0
 		fi
-		echo "${_name}" > "${CACHE}/exit.reason"
+		echo "power" > "${CACHE}/exit.reason"
 	) &
-	echo $!
-}
-
-_pids=""
-if [ -n "${LIPC_WAIT}" ]; then
-	_pids="$(watch power com.lab126.powerd powerButtonPressed)"
-	_pids="${_pids} $(watch usb com.lab126.hal usbPlugIn)"
-else
-	log "wait-exit: no lipc-wait-event; polling screensaver + STOP file"
+	_track $!
 fi
-
-# Without events, detect sleep/screensaver by polling powerd.
-_screensaver_active() {
-	[ -n "${LIPC_WAIT}" ] && return 1
-	_st=$(lipc-get-prop com.lab126.powerd status 2>/dev/null)
-	case "${_st}" in
-		*creenSaver*|*creen\ Saver*|*creensaver*) return 0 ;;
-	esac
-	return 1
-}
 
 _kill_watchers() {
 	for _p in ${_pids}; do
@@ -72,7 +73,7 @@ _kill_watchers() {
 	done
 }
 
-# Grace period: drop any reason written while the image was still being drawn.
+# Ignore anything that fires while the image is still being painted.
 _grace=4
 while [ "${_grace}" -gt 0 ]; do
 	rm -f "${CACHE}/exit.reason" 2>/dev/null
@@ -81,6 +82,8 @@ while [ "${_grace}" -gt 0 ]; do
 	_grace=$((_grace - 1))
 done
 
+_elapsed=0
+_limit=$((EXIT_TIMEOUT_MIN * 60))
 while true; do
 	if [ -f "${CACHE}/STOP" ]; then
 		_kill_watchers
@@ -92,15 +95,15 @@ while true; do
 		_kill_watchers
 		_exit_now "${_r:-event}"
 	fi
-	if _screensaver_active; then
-		_kill_watchers
-		_exit_now screensaver
-	fi
-	# Salir (or anything else) cleared our marker: stop watching, leave UI alone.
 	if [ ! -f "${CACHE}/showing.pid" ]; then
 		_kill_watchers
 		log "wait-exit: showing.pid gone, exiting"
 		exit 0
 	fi
+	if [ "${_elapsed}" -ge "${_limit}" ]; then
+		_kill_watchers
+		_exit_now timeout
+	fi
 	sleep 2
+	_elapsed=$((_elapsed + 2))
 done
