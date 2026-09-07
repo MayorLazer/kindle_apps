@@ -73,32 +73,39 @@ function collectTasks() {
   }
 
   lists.forEach(function (list) {
-    var tasks =
-      Tasks.Tasks.list(list.id, {
+    // The API caps maxResults at 100 and returns tasks in manual position
+    // order, not by due date, so a long list hides dated tasks unless we page.
+    var pageToken = null;
+    do {
+      var resp = Tasks.Tasks.list(list.id, {
         showCompleted: false,
         showHidden: false,
         maxResults: 100,
-      }).items || [];
-
-    tasks.forEach(function (t) {
-      if (t.status === 'completed' || !t.title) {
-        return;
-      }
-      // Tasks store due as a date at midnight UTC; keep only the date part.
-      var due = t.due ? t.due.substring(0, 10) : '';
-      if (!due) {
-        return; // only tasks with a date, whether upcoming or overdue
-      }
-      if (cutoff && new Date(due + 'T00:00:00Z') > cutoff) {
-        return;
-      }
-      out.push({
-        title: t.title,
-        due: due,
-        notes: t.notes || '',
-        list: list.title || '',
+        pageToken: pageToken,
       });
-    });
+
+      (resp.items || []).forEach(function (t) {
+        if (t.status === 'completed' || !t.title) {
+          return;
+        }
+        // Tasks store due as a date at midnight UTC; keep only the date part.
+        var due = t.due ? t.due.substring(0, 10) : '';
+        if (!due) {
+          return; // only tasks with a date, whether upcoming or overdue
+        }
+        if (cutoff && new Date(due + 'T00:00:00Z') > cutoff) {
+          return;
+        }
+        out.push({
+          title: t.title,
+          due: due,
+          notes: t.notes || '',
+          list: list.title || '',
+        });
+      });
+
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
   });
 
   // Soonest first, so overdue tasks head the list.

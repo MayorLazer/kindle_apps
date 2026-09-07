@@ -49,6 +49,7 @@ jobs:
         env:
           ICS_URL: ${{ secrets.ICS_URL }}
           ICS_URLS: ${{ secrets.ICS_URLS }}
+          ICS_URLS_PUBLIC: ${{ vars.ICS_URLS_PUBLIC }}
           EXTRAS_URL: ${{ secrets.EXTRAS_URL }}
           TIMEZONE: ${{ vars.TIMEZONE }}
           CALENDAR_DAYS: ${{ vars.CALENDAR_DAYS }}
@@ -62,6 +63,8 @@ jobs:
           fi
           export TIMEZONE="${TIMEZONE:-America/Argentina/Buenos_Aires}"
           export CALENDAR_DAYS="${CALENDAR_DAYS:-14}"
+          # Public, non-secret feeds. Default: Argentina holidays.
+          export ICS_URLS_PUBLIC="${ICS_URLS_PUBLIC:-https://calendar.google.com/calendar/ical/en-gb.ar.official%23holiday%40group.v.calendar.google.com/public/basic.ics}"
           # Framebuffer size per fbink; PW3/PW4 would be 1072x1448.
           export PNG_WIDTH="${PNG_WIDTH:-758}"
           export PNG_HEIGHT="${PNG_HEIGHT:-1024}"

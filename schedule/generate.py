@@ -695,9 +695,7 @@ def draw_png(
             for e in chips:
                 box = [x + 6, cy, x + col_w - 6, cy + 22]
                 d.rounded_rectangle(box, radius=6, outline=0, width=1, fill=235)
-                txt = e.summary
-                if len(txt) > 16:
-                    txt = txt[:14] + ".."
+                txt = _fit_text(e.summary, f_chip, col_w - 20)
                 d.text((x + col_w / 2, cy + 3), txt, font=f_chip, fill=0, anchor="ma")
                 cy += 26
 
@@ -942,6 +940,8 @@ def write_ci_config(path: Path) -> None:
         urls.insert(0, single)
     if not urls:
         raise SystemExit("Set ICS_URL or ICS_URLS env var for CI")
+    # Public feeds (holidays, etc.) come from a variable, not a secret.
+    urls += [u.strip() for u in os.environ.get("ICS_URLS_PUBLIC", "").split("|") if u.strip()]
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
     extras = os.environ.get("EXTRAS_URL", "").strip()
