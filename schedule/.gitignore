@@ -1,0 +1,9 @@
+# Local secrets / generated files
+config.toml
+config.ci.toml
+output/
+__pycache__/
+*.pyc
+.venv/
+
+config.ci.toml

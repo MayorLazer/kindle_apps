@@ -1,0 +1,97 @@
+name: Build Kindle calendar
+
+on:
+  schedule:
+    # Every day 10:00 UTC ~= 07:00 Argentina (UTC-3)
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - "schedule/generate.py"
+      - "schedule/requirements.txt"
+      - ".github/workflows/calendar.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: calendar-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+
+      - name: Install Python deps
+        run: pip install -r schedule/requirements.txt
+
+      - name: Generate calendar PNG/PDF
+        env:
+          ICS_URL: ${{ secrets.ICS_URL }}
+          ICS_URLS: ${{ secrets.ICS_URLS }}
+          TIMEZONE: ${{ vars.TIMEZONE }}
+          CALENDAR_DAYS: ${{ vars.CALENDAR_DAYS }}
+        run: |
+          if [ -z "$ICS_URL" ] && [ -z "$ICS_URLS" ]; then
+            echo "Add repository secret ICS_URL (Google Calendar secret iCal address)."
+            exit 1
+          fi
+          export TIMEZONE="${TIMEZONE:-America/Argentina/Buenos_Aires}"
+          export CALENDAR_DAYS="${CALENDAR_DAYS:-14}"
+          python schedule/generate.py --from-env --config schedule/config.ci.toml
+
+      - name: Stage GitHub Pages site
+        env:
+          PUBLISH_SLUG: ${{ secrets.PUBLISH_SLUG }}
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp schedule/output/calendar.png _site/calendar.png
+          cp schedule/output/calendar.pdf _site/calendar.pdf
+          # Optional obscure path so the URL is harder to guess
+          if [ -n "$PUBLISH_SLUG" ]; then
+            mkdir -p "_site/c/$PUBLISH_SLUG"
+            cp schedule/output/calendar.png "_site/c/$PUBLISH_SLUG/calendar.png"
+            echo "Slug URL path: /c/${PUBLISH_SLUG}/calendar.png"
+          fi
+          cat > _site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <meta charset="utf-8">
+          <title>kindle calendar</title>
+          <p>calendar.png is published for the Kindle KUAL app.</p>
+          <p><a href="./calendar.png">calendar.png</a></p>
+          EOF
+          date -u +"Generated %Y-%m-%dT%H:%M:%SZ" > _site/updated.txt
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-images
+          path: |
+            schedule/output/calendar.png
+            schedule/output/calendar.pdf

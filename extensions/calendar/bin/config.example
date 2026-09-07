@@ -1,0 +1,14 @@
+# Copy to "config" on the Kindle (same folder as this file is NOT used —
+# real config lives at: /mnt/us/extensions/calendar/bin/config ).
+#
+# After GitHub Actions publishes Pages, set CALENDAR_URL to:
+#   https://<user>.github.io/<repo>/calendar.png
+# or the obscure slug URL:
+#   https://<user>.github.io/<repo>/c/<PUBLISH_SLUG>/calendar.png
+
+CALENDAR_URL="https://REPLACE.github.io/kindle_apps/calendar.png"
+
+# 1 = ignore TLS errors (often needed on older Kindle wget)
+WGET_INSECURE=1
+
+FBINK="/mnt/us/libkh/bin/fbink"

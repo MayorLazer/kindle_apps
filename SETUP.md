@@ -1,0 +1,214 @@
+# Setup guide: GitHub Actions + Kindle
+
+Two configs exist — don’t mix them up:
+
+| File | Where | Purpose |
+|------|--------|---------|
+| GitHub **Secrets** (`ICS_URL`) | GitHub website | Cloud builds the PNG daily |
+| `extensions/calendar/bin/config` | On the **Kindle** | KUAL downloads that PNG |
+| `schedule/config.toml` | On your **PC** (optional) | Local generate / USB / SCP sync |
+
+Never commit `schedule/config.toml` or Kindle `bin/config` if they contain real URLs.
+
+---
+
+## Part A — What to upload to GitHub
+
+### 1. Create the repo
+
+1. Create a new GitHub repository (e.g. `kindle_apps`), public or private.
+2. From your PC:
+
+```powershell
+cd d:\Apps\kindle_apps
+git init
+git add .
+git status
+```
+
+### 2. Do **not** commit secrets
+
+Confirm these stay untracked / ignored:
+
+- `schedule/config.toml` (has your Google ICS URL)
+- `schedule/output/` (generated files)
+- `extensions/calendar/bin/config` (Kindle URL)
+- `extensions/gcal/bin/config`
+
+Safe to commit:
+
+- `.github/workflows/calendar.yml`
+- `schedule/generate.py`
+- `schedule/requirements.txt`
+- `schedule/config.example.toml`
+- `schedule/README.md`
+- `extensions/calendar/` (scripts + `config.example`, **not** `config`)
+- `README.md`
+- `.gitignore`
+
+```powershell
+git add .github schedule extensions/calendar README.md .gitignore
+git commit -m "Add Kindle calendar: Actions build + KUAL viewer"
+git branch -M main
+git remote add origin https://github.com/YOURUSER/kindle_apps.git
+git push -u origin main
+```
+
+(Replace `YOURUSER` / repo name.)
+
+### 3. Add the Google Calendar secret
+
+1. Open [Google Calendar](https://calendar.google.com) → Settings → your calendar → **Integrate calendar**.
+2. Copy **Secret address in iCal format** (`.../private-.../basic.ics`).
+3. On GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `ICS_URL`
+   - Value: paste the full iCal URL
+
+Optional secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `PUBLISH_SLUG` | Random string so the PNG URL is harder to guess |
+| `ICS_URLS` | Extra calendars, separated by `\|` |
+
+Optional **Variables** (Settings → Secrets → Variables):
+
+| Variable | Example |
+|----------|---------|
+| `TIMEZONE` | `America/Argentina/Buenos_Aires` |
+| `CALENDAR_DAYS` | `14` |
+
+### 4. Enable GitHub Pages
+
+1. Repo **Settings → Pages**
+2. **Source**: **GitHub Actions**
+3. Actions tab → **Build Kindle calendar** → **Run workflow**
+4. When it finishes, open:
+
+```text
+https://YOURUSER.github.io/kindle_apps/calendar.png
+```
+
+If you set `PUBLISH_SLUG` (e.g. `a8f3c91d`):
+
+```text
+https://YOURUSER.github.io/kindle_apps/c/a8f3c91d/calendar.png
+```
+
+Use that URL on the Kindle (next section).
+
+---
+
+## Part B — Kindle KUAL app (download + show)
+
+### 1. Copy the extension
+
+With the Kindle on USB:
+
+1. Copy folder `extensions\calendar` → `Kindle\extensions\calendar`
+2. On the Kindle drive, create:
+
+`extensions\calendar\bin\config`
+
+(from `config.example`)
+
+### 2. Edit Kindle `bin/config`
+
+```sh
+CALENDAR_URL="https://YOURUSER.github.io/kindle_apps/calendar.png"
+WGET_INSECURE=1
+FBINK="/mnt/us/libkh/bin/fbink"
+```
+
+Prefer the slug URL if you set `PUBLISH_SLUG`.
+
+Requirements on the Kindle:
+
+- Jailbreak + **KUAL**
+- **FBInk** at `/mnt/us/libkh/bin/fbink` (or change `FBINK=`)
+- Wi‑Fi working when you tap **Actualizar**
+
+### 3. Use it
+
+1. Eject USB  
+2. **KUAL → Calendario → Actualizar y mostrar**  
+   (Wi‑Fi on → download PNG → Wi‑Fi off → display)  
+3. **Mostrar (cache)** = offline  
+4. **Salir** (or power button) = back to Home  
+
+---
+
+## Part C — Optional: PC `config.toml` + SSH (push without USB)
+
+This is **only** for `schedule\sync.ps1` on your Windows PC.  
+The KUAL app does **not** read this file.
+
+### 1. PC config
+
+```powershell
+cd d:\Apps\kindle_apps\schedule
+copy config.example.toml config.toml
+notepad config.toml
+```
+
+Example:
+
+```toml
+ics_urls = [
+  "https://calendar.google.com/calendar/ical/.../private-.../basic.ics",
+]
+
+timezone = "America/Argentina/Buenos_Aires"
+schedule_days = 5
+start_hour = 8
+end_hour = 22
+
+# Leave empty if you only use GitHub Actions + KUAL download
+ssh_host = "192.168.1.50"
+ssh_port = 2222
+ssh_user = "root"
+```
+
+### 2. Enable SSH in KOReader (Kindle)
+
+1. Install/open **KOReader**
+2. Top menu → **Settings → Network → SSH server** → enable  
+3. Default port is usually **2222**
+4. Note the Kindle’s Wi‑Fi IP (router admin page, or KOReader network info)
+5. Prefer **SSH public key** auth (KOReader shows `authorized_keys` path)
+
+On Windows, install **OpenSSH Client** if `scp` is missing  
+(Settings → Apps → Optional features).
+
+### 3. Push from PC
+
+Wake Kindle (KOReader open, Wi‑Fi on), then:
+
+```powershell
+cd d:\Apps\kindle_apps\schedule
+powershell -ExecutionPolicy Bypass -File .\sync.ps1
+```
+
+That generates PNG/PDF and runs `scp` to the Kindle if `ssh_host` is set.  
+USB copy still works when the Kindle is plugged in.
+
+---
+
+## Recommended daily flow
+
+1. **GitHub Actions** rebuilds `calendar.png` every morning  
+2. On the desk Kindle: **KUAL → Actualizar y mostrar** when you want a refresh  
+
+No PC required after the first GitHub + Kindle setup.
+
+---
+
+## Checklist
+
+- [ ] Repo pushed without `config.toml` / secrets  
+- [ ] Secret `ICS_URL` set  
+- [ ] Pages = GitHub Actions; workflow succeeded  
+- [ ] `calendar.png` opens in the browser  
+- [ ] `extensions/calendar` on Kindle + `bin/config` with `CALENDAR_URL`  
+- [ ] FBInk present  
+- [ ] **Actualizar y mostrar** works once on Wi‑Fi  

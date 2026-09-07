@@ -1,0 +1,8 @@
+# Local secrets and device cache
+**/bin/config
+**/cache/*
+!**/cache/.gitignore
+*.log
+.DS_Store
+Thumbs.db
+.config

@@ -1,0 +1,27 @@
+# Copy to config.toml and edit. Never commit real ICS URLs.
+
+ics_urls = [
+  "https://calendar.google.com/calendar/ical/REPLACE/private-REPLACE/basic.ics",
+]
+
+timezone = "America/Argentina/Buenos_Aires"
+days = 14
+
+# Weekly timetable PNG (KUAL view)
+schedule_days = 5
+start_hour = 8
+end_hour = 22
+
+output = "output/calendar.pdf"
+png_output = "output/calendar.png"
+insecure_ssl = false
+
+ssh_host = ""
+ssh_port = 2222
+ssh_user = "root"
+
+[screen]
+width_in = 3.58
+height_in = 4.82
+png_width = 1072
+png_height = 1448

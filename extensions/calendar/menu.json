@@ -1,0 +1,34 @@
+{
+	"items": [
+		{
+			"name": "Calendario",
+			"priority": -998,
+			"items": [
+				{
+					"name": "Actualizar y mostrar",
+					"priority": 1,
+					"action": "./bin/update.sh",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
+				},
+				{
+					"name": "Mostrar (cache)",
+					"priority": 2,
+					"action": "./bin/show.sh",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
+				},
+				{
+					"name": "Salir",
+					"priority": 3,
+					"action": "./bin/stop.sh",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
+				}
+			]
+		}
+	]
+}
