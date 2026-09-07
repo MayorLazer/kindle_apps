@@ -28,6 +28,7 @@ var SHARED_SECRET = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 var BIRTHDAY_DAYS_AHEAD = 45;
 
 // Skip tasks due further out than this. 0 disables the limit.
+// Tasks with no due date are never reported.
 var TASK_DAYS_AHEAD = 30;
 
 function doGet(e) {
@@ -85,7 +86,10 @@ function collectTasks() {
       }
       // Tasks store due as a date at midnight UTC; keep only the date part.
       var due = t.due ? t.due.substring(0, 10) : '';
-      if (due && cutoff && new Date(due + 'T00:00:00Z') > cutoff) {
+      if (!due) {
+        return; // only tasks with a date, whether upcoming or overdue
+      }
+      if (cutoff && new Date(due + 'T00:00:00Z') > cutoff) {
         return;
       }
       out.push({
@@ -97,12 +101,9 @@ function collectTasks() {
     });
   });
 
-  // Dated first (soonest first), undated last.
+  // Soonest first, so overdue tasks head the list.
   out.sort(function (a, b) {
-    if (a.due && b.due) return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
-    if (a.due) return -1;
-    if (b.due) return 1;
-    return 0;
+    return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
   });
   return out;
 }

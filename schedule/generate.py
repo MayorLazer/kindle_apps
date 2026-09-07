@@ -168,12 +168,13 @@ def fetch_extras(cfg: Config) -> tuple[list[Task], list[Ev]]:
         title = str(t.get("title", "")).strip()
         if not title:
             continue
-        due: date | None = None
-        if t.get("due"):
-            try:
-                due = date.fromisoformat(str(t["due"])[:10])
-            except ValueError:
-                due = None
+        # Only dated tasks are shown, so drop anything the feed sends undated.
+        if not t.get("due"):
+            continue
+        try:
+            due = date.fromisoformat(str(t["due"])[:10])
+        except ValueError:
+            continue
         tasks.append(Task(title=sanitize_text(title), due=due, notes=sanitize_text(str(t.get("notes", "")))))
 
     birthdays: list[Ev] = []
@@ -464,15 +465,14 @@ def _draw_task_sidebar(
     for t in tasks:
         if y > y_stop:
             break
-        if t.due:
-            if t.due < today:
-                when = "atrasada"
-            elif t.due == today:
-                when = "hoy"
-            else:
-                when = t.due.strftime("%d/%m")
+        if t.due is None:
+            continue
+        if t.due < today:
+            when = "atrasada"
+        elif t.due == today:
+            when = "hoy"
         else:
-            when = "sin fecha"
+            when = t.due.strftime("%d/%m")
         d.rectangle([x0 + 8, y + 2, x0 + 17, y + 11], outline=0, width=1)
         d.text((text_x, y - 1), when, font=fonts["meta"], fill=90)
         y += 13
