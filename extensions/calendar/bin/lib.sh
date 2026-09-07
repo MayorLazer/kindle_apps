@@ -35,6 +35,15 @@ load_config() {
 		done
 	fi
 
+	# KUAL's PATH can be minimal; resolve lipc-wait-event explicitly.
+	LIPC_WAIT=""
+	for c in lipc-wait-event /usr/bin/lipc-wait-event /usr/local/bin/lipc-wait-event; do
+		if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then
+			LIPC_WAIT="$c"
+			break
+		fi
+	done
+
 	if [ -z "${CURL}" ] || [ ! -f "${CURL}" ]; then
 		CURL=""
 		for c in \
@@ -139,14 +148,24 @@ wifi_off() {
 	lipc-set-prop com.lab126.cmd wirelessEnable 0 2>/dev/null
 }
 
+# UI processes that repaint the framebuffer (KUAL's "book cover", home grid, chrome).
+# cvm = Java framework (older FW), mesquite = newer FW. Freeze whichever exists.
+UI_PROCS="cvm mesquite"
+
 lock_ui() {
-	# Do not set preventScreenSaver: power button can still fire events so wait-exit can Salir.
-	killall -STOP mesquite 2>/dev/null
+	# Do not set preventScreenSaver: power button must still fire so wait-exit can Salir.
 	lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+	for _p in ${UI_PROCS}; do
+		if killall -STOP "${_p}" 2>/dev/null; then
+			log "lock_ui: stopped ${_p}"
+		fi
+	done
 }
 
 unlock_ui() {
-	killall -CONT mesquite 2>/dev/null
+	for _p in ${UI_PROCS}; do
+		killall -CONT "${_p}" 2>/dev/null
+	done
 	lipc-set-prop com.lab126.powerd preventScreenSaver 0 2>/dev/null
 	lipc-set-prop com.lab126.pillow disableEnablePillow enable 2>/dev/null
 	lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home 2>/dev/null
@@ -213,12 +232,12 @@ display_image() {
 		return 1
 	fi
 
-	# Detach: paint AFTER leaving KUAL, and redraw after freezing mesquite.
-	# If we STOP mesquite then fail to paint, the chrome is gone and the screen stays blank.
+	# Detach so KUAL can close first, then paint. Painting before the menu is gone
+	# lets the framework repaint its book cover on top of the calendar.
 	(
-		sleep 1
+		sleep 2
 		log "display: start ${_path}"
-		# First paint while UI still alive (proves image works).
+		# Prove the image draws while the UI is still alive.
 		if ! draw_png "${_path}"; then
 			/usr/sbin/eips -c 2>/dev/null
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
@@ -226,8 +245,8 @@ display_image() {
 			log "display: draw failed before lock"
 			exit 1
 		fi
+
 		lock_ui
-		# Mesquite may have painted over us when freezing — paint again.
 		if ! draw_png "${_path}"; then
 			unlock_ui
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
@@ -237,6 +256,15 @@ display_image() {
 		echo "1" > "${CACHE}/showing.pid"
 		start_waiter
 		log "display: ok ${_path}"
+
+		# Late repaints (KUAL cover, home chrome) can land after our draw; overwrite them.
+		for _d in 2 3 5; do
+			sleep "${_d}"
+			[ -f "${CACHE}/showing.pid" ] || exit 0
+			[ -f "${CACHE}/STOP" ] && exit 0
+			draw_png "${_path}" >/dev/null 2>&1
+		done
+		log "display: redraw pass done"
 	) >/dev/null 2>&1 &
 	return 0
 }

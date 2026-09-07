@@ -124,8 +124,8 @@ def load_config(path: Path) -> Config:
         end_hour=int(data.get("end_hour", 22)),
         output=out,
         png_output=png,
-        png_width=int(screen.get("png_width", 1072)),
-        png_height=int(screen.get("png_height", 1448)),
+        png_width=int(screen.get("png_width", 758)),
+        png_height=int(screen.get("png_height", 1024)),
         page_width_in=float(screen.get("width_in", 3.58)),
         page_height_in=float(screen.get("height_in", 4.82)),
         insecure_ssl=bool(data.get("insecure_ssl", False)),
@@ -626,6 +626,9 @@ def write_ci_config(path: Path) -> None:
         raise SystemExit("Set ICS_URL or ICS_URLS env var for CI")
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
+    # Must match the device framebuffer. PW1/PW2 = 758x1024, PW3/PW4 = 1072x1448.
+    png_w = os.environ.get("PNG_WIDTH", "758")
+    png_h = os.environ.get("PNG_HEIGHT", "1024")
     lines = [
         "ics_urls = [",
         *[f'  "{u.replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34))}",' for u in urls],
@@ -641,8 +644,8 @@ def write_ci_config(path: Path) -> None:
         "[screen]",
         "width_in = 3.58",
         "height_in = 4.82",
-        "png_width = 1072",
-        "png_height = 1448",
+        f"png_width = {png_w}",
+        f"png_height = {png_h}",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")

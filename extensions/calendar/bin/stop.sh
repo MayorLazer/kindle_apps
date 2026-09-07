@@ -18,5 +18,5 @@ if [ -n "${FBINK}" ] && [ -f "${FBINK}" ]; then
 	"${FBINK}" -q -m -y 18 "Calendario cerrado" 2>/dev/null
 	"${FBINK}" -q -m -y 20 "Home restaurado" 2>/dev/null
 fi
-log "stop"
+log "stop (ppid=${PPID:-?})"
 exit 0

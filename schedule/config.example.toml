@@ -23,5 +23,7 @@ ssh_user = "root"
 [screen]
 width_in = 3.58
 height_in = 4.82
-png_width = 1072
-png_height = 1448
+# Must match the device framebuffer (fbink prints it). PW1/PW2 = 758x1024,
+# PW3/PW4 = 1072x1448.
+png_width = 758
+png_height = 1024
