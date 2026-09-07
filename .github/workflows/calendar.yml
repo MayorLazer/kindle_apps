@@ -2,8 +2,9 @@ name: Build Kindle calendar
 
 on:
   schedule:
-    # Every day 10:00 UTC ~= 07:00 Argentina (UTC-3)
-    - cron: "0 10 * * *"
+    # Every 4h, so same-day calendar edits and the footer stamp stay current.
+    # 10:00 UTC ~= 07:00 Argentina (UTC-3).
+    - cron: "0 2,6,10,14,18,22 * * *"
   workflow_dispatch:
   push:
     paths:
@@ -40,6 +41,9 @@ jobs:
 
       - name: Install Python deps
         run: pip install -r schedule/requirements.txt
+
+      - name: Layout smoke tests
+        run: python -m unittest discover -s schedule -p "test_*.py"
 
       - name: Generate calendar PNG/PDF
         env:

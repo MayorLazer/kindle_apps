@@ -415,25 +415,42 @@ def _hatch_rect(draw: ImageDraw.ImageDraw, box: list[float], step: int = 7) -> N
 
 
 def _assign_lanes(day_events: list[Ev]) -> dict[int, tuple[int, int]]:
-    """Map event index -> (lane, lane_count) for overlapping timed events."""
+    """Map event index -> (lane, lane_count) for overlapping timed events.
+
+    lane_count is per overlap group, not per day: a single triple-booked hour
+    must not squeeze the rest of the day's events into a third of the column.
+    """
     timed = [(i, e) for i, e in enumerate(day_events) if not e.all_day and isinstance(e.start, datetime)]
     timed.sort(key=lambda t: (t[1].start, t[1].end))
+
+    out: dict[int, tuple[int, int]] = {}
+    group: list[int] = []  # indices in the current overlap group
     lane_end: list[datetime] = []
-    assigned: dict[int, int] = {}
+    group_end: datetime | None = None
+
     for i, e in timed:
-        assert isinstance(e.start, datetime) and isinstance(e.end, datetime)
+        assert isinstance(e.start, datetime)
+        e_end = e.end if isinstance(e.end, datetime) else e.start + timedelta(hours=1)
+        if group_end is not None and e.start >= group_end:
+            for idx in group:
+                out[idx] = (out[idx][0], len(lane_end))
+            group, lane_end, group_end = [], [], None
+
         lane = 0
         while lane < len(lane_end) and e.start < lane_end[lane]:
             lane += 1
         if lane == len(lane_end):
-            lane_end.append(e.end)
+            lane_end.append(e_end)
         else:
-            lane_end[lane] = e.end
-        assigned[i] = lane
-    # lane_count = max concurrent approx = max lane+1 seen
-    max_lane = max(assigned.values(), default=0) + 1
-    # Better: per-event, count how many share overlap group - use global max for simplicity
-    return {i: (assigned[i], max_lane) for i in assigned}
+            lane_end[lane] = e_end
+
+        out[i] = (lane, 1)
+        group.append(i)
+        group_end = e_end if group_end is None else max(group_end, e_end)
+
+    for idx in group:
+        out[idx] = (out[idx][0], len(lane_end))
+    return out
 
 
 def _fit_text(text: str, font: ImageFont.ImageFont, max_w: float) -> str:
@@ -541,8 +558,15 @@ def draw_png(
     start: date,
     tasks: list[Task] | None = None,
     birthdays: list[Ev] | None = None,
+    generated: datetime | None = None,
+    failed_feeds: int = 0,
 ) -> None:
-    """Weekly timetable view (kindle_schedule-style) for KUAL."""
+    """Weekly timetable view (kindle_schedule-style) for KUAL.
+
+    `generated` is stamped in the footer and marks the current time on today's
+    column: without it a cached image on the Kindle looks identical to a fresh
+    one. `failed_feeds` warns that the grid is missing a calendar's events.
+    """
     # png_width/height describe the screen. For a rotated view the layout is
     # drawn sideways and rotated back at save time, so swap them here.
     if cfg.png_rotate in (90, 270):
@@ -751,25 +775,22 @@ def draw_png(
             tx = x0 + 5
             ty = y0 + 4
             title = e.summary
-            max_c = max(6, int((x1 - x0) / 9))
+            text_w = x1 - tx - 4
             when = f"{e.start.strftime('%H:%M')} - {end_dt.strftime('%H:%M')}"
             # Short boxes (landscape rows) have no second line, so lead with the time.
             room_for_time = y1 - y0 >= 40
-            if not room_for_time:
+            # Narrow lanes can't fit "09:00 Reunion", and the title matters more.
+            if not room_for_time and text_w >= 70:
                 title = f"{e.start.strftime('%H:%M')} {title}"
-            if len(title) > max_c:
-                title = title[: max_c - 2] + ".."
-            d.text((tx, ty), title, font=f_title, fill=ink)
+            d.text((tx, ty), _fit_text(title, f_title, text_w), font=f_title, fill=ink)
             ty += 18
             if room_for_time:
-                d.text((tx, ty), when, font=f_meta, fill=ink)
+                d.text((tx, ty), _fit_text(when, f_meta, text_w), font=f_meta, fill=ink)
                 ty += 16
             if y1 - y0 >= 56:
                 note = e.location or e.description
                 if note:
-                    if len(note) > max_c:
-                        note = note[: max_c - 2] + ".."
-                    d.text((tx, ty), note, font=f_meta, fill=ink)
+                    d.text((tx, ty), _fit_text(note, f_meta, text_w), font=f_meta, fill=ink)
 
     if sidebar_w:
         side_fonts = {"head": f_foot, "task": f_task, "meta": f_task_meta}
@@ -796,12 +817,25 @@ def draw_png(
             b_y0 = grid_bottom - bday_h if tasks else margin_t
             _draw_birthday_box(d, bdays[:rows], (side_x0, b_y0, side_x1, b_y0 + bday_h), side_fonts, hidden)
 
-    # Footer: exit hint only
+    # Now marker: the build time is "now" only on the day it was generated.
+    if generated is not None and generated.date() in days and start_h <= generated.hour < end_h:
+        gi = days.index(generated.date())
+        gx = grid_left + gi * col_w
+        gy = y_for(generated, generated.date())
+        d.line([gx, gy, gx + col_w, gy], fill=0, width=2)
+        d.ellipse([gx - 3, gy - 3, gx + 3, gy + 3], fill=0)
+
+    # Footer: exit hint, generation stamp, and any missing-feed warning
     d.rectangle([0, h - footer_h, w, h], fill=0)
     d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
+    hint = "Toca la pantalla o boton power"
+    if generated is not None:
+        hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
+    if failed_feeds:
+        hint = f"{hint}  -  SIN DATOS: {failed_feeds} calendario(s)"
     d.text(
         (w // 2, h - footer_h + 27),
-        "Toca la pantalla o boton power",
+        _fit_text(hint, f_hint, w - 40),
         font=f_hint,
         fill=255,
         anchor="ma",
@@ -971,12 +1005,14 @@ def main() -> None:
     cfg = load_config(args.config)
     tz = ZoneInfo(cfg.timezone)
     blobs: list[bytes] = []
+    failed_feeds = 0
     if cfg.ics_urls:
         print(f"Fetching {len(cfg.ics_urls)} calendar URL(s)...")
         for i, u in enumerate(cfg.ics_urls, 1):
             try:
                 blobs.append(fetch_ics(u, cfg.insecure_ssl))
             except Exception as exc:  # noqa: BLE001 - one bad feed must not stop the build
+                failed_feeds += 1
                 # Don't log the URL: it is a secret address.
                 print(f"WARNING: calendar #{i} failed ({exc}). Check that secret iCal URL.")
     for f in cfg.ics_files:
@@ -991,7 +1027,7 @@ def main() -> None:
     print(f"Parsed {len(events)} event instances in window.")
     tasks, birthdays = fetch_extras(cfg)
     events.extend(birthdays)
-    draw_png(cfg, events, start, tasks, birthdays)
+    draw_png(cfg, events, start, tasks, birthdays, datetime.now(tz), failed_feeds)
     print(f"Wrote {cfg.png_output}")
     draw_pdf(cfg, events, start)
     print(f"Wrote {cfg.output}")
