@@ -7,7 +7,8 @@
 				{
 					"name": "Actualizar y mostrar",
 					"priority": 1,
-					"action": "./bin/update.sh",
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/update.sh",
 					"exitmenu": true,
 					"refresh": false,
 					"status": false
@@ -15,7 +16,8 @@
 				{
 					"name": "Mostrar (cache)",
 					"priority": 2,
-					"action": "./bin/show.sh",
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/show.sh",
 					"exitmenu": true,
 					"refresh": false,
 					"status": false
@@ -23,7 +25,8 @@
 				{
 					"name": "Salir",
 					"priority": 3,
-					"action": "./bin/stop.sh",
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/stop.sh",
 					"exitmenu": true,
 					"refresh": false,
 					"status": false

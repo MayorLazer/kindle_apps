@@ -7,7 +7,7 @@ EXT="/mnt/us/extensions/calendar"
 load_config
 
 touch "${CACHE}/STOP" 2>/dev/null
-kill_waite
+kill_waiter
 unlock_ui
 rm -f "${CACHE}/showing.pid" "${CACHE}/STOP" "${CACHE}/exit.reason" 2>/dev/null
 

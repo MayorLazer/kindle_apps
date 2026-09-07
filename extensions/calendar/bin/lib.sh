@@ -36,12 +36,19 @@ load_config() {
 
 find_image() {
 	for c in "${IMG}" "/mnt/us/documents/calendar.png" "/mnt/us/calendar.png"; do
-		if [ -f "$c" ]; then
+		if [ -f "$c" ] && is_png "$c"; then
 			echo "$c"
 			return 0
 		fi
 	done
 	return 1
+}
+
+# PNG magic: 89 50 4E 47
+is_png() {
+	[ -f "$1" ] || return 1
+	_od=$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')
+	[ "${_od}" = "89504e47" ]
 }
 
 wifi_on() {
@@ -85,26 +92,81 @@ kill_waiter() {
 }
 
 start_waiter() {
-	kill_waite
+	kill_waiter
 	rm -f "${CACHE}/exit.reason" "${CACHE}/STOP" 2>/dev/null
 	/bin/sh "${BIN}/wait-exit.sh" >> "${LOG}" 2>&1 &
+	echo $! > "${CACHE}/waiter.pid"
+}
+
+# Try FBInk image flags used across builds; fall back to eips -g.
+draw_png() {
+	_img="$1"
+	if [ -n "${FBINK}" ] && [ -f "${FBINK}" ]; then
+		# Prefer a single flashing paint (clear + image).
+		if "${FBINK}" -g "file=${_img}" -f >> "${LOG}" 2>&1; then
+			return 0
+		fi
+		if "${FBINK}" -c -g "file=${_img}" -f >> "${LOG}" 2>&1; then
+			return 0
+		fi
+		# Older / alternate CLI
+		if "${FBINK}" -i "${_img}" -f >> "${LOG}" 2>&1; then
+			return 0
+		fi
+		log "fbink image flags failed; fbink -h follows"
+		"${FBINK}" -h >> "${LOG}" 2>&1
+	else
+		log "draw_png: no fbink at '${FBINK}'"
+	fi
+	# Last resort on some firmwares
+	if /usr/sbin/eips -g "${_img}" >> "${LOG}" 2>&1; then
+		return 0
+	fi
+	return 1
 }
 
 display_image() {
 	_path="$1"
-	if [ -z "${FBINK}" ] || [ ! -f "${FBINK}" ]; then
-		/usr/sbin/eips 2 3 "Falta fbink" 2>/dev/null
-		return 1
-	fi
 	if [ -z "${_path}" ] || [ ! -f "${_path}" ]; then
 		/usr/sbin/eips 2 3 "Falta calendar.png" 2>/dev/null
+		log "display: missing path"
 		return 1
 	fi
-	lock_ui
-	"${FBINK}" -q -c -f 2>/dev/null
-	"${FBINK}" -q -g "file=${_path}" -f 2>/dev/null
-	echo "1" > "${CACHE}/showing.pid"
-	log "display ${_path}"
-	start_waite
+	if ! is_png "${_path}"; then
+		/usr/sbin/eips 2 3 "PNG invalido" 2>/dev/null
+		log "display: not a png: ${_path}"
+		return 1
+	fi
+	if [ -z "${FBINK}" ] || [ ! -f "${FBINK}" ]; then
+		/usr/sbin/eips 2 3 "Falta fbink" 2>/dev/null
+		log "display: missing fbink"
+		return 1
+	fi
+
+	# Detach: paint AFTER leaving KUAL, and redraw after freezing mesquite.
+	# If we STOP mesquite then fail to paint, the chrome is gone and the screen stays blank.
+	(
+		sleep 1
+		log "display: start ${_path}"
+		# First paint while UI still alive (proves image works).
+		if ! draw_png "${_path}"; then
+			/usr/sbin/eips -c 2>/dev/null
+			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
+			/usr/sbin/eips 2 5 "Ver cache/calendar.log" 2>/dev/null
+			log "display: draw failed before lock"
+			exit 1
+		fi
+		lock_ui
+		# Mesquite may have painted over us when freezing — paint again.
+		if ! draw_png "${_path}"; then
+			unlock_ui
+			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
+			log "display: draw failed after lock"
+			exit 1
+		fi
+		echo "1" > "${CACHE}/showing.pid"
+		start_waiter
+		log "display: ok ${_path}"
+	) >/dev/null 2>&1 &
 	return 0
 }

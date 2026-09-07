@@ -17,6 +17,7 @@ if [ -z "${CALENDAR_URL}" ] || echo "${CALENDAR_URL}" | grep -q REPLACE; then
 	exit 1
 fi
 
+/usr/sbin/eips 1 2 "wifi..." 2>/dev/null
 if ! wifi_on; then
 	/usr/sbin/eips 2 3 "Sin Wi-Fi" 2>/dev/null
 	log "update: wifi failed"
@@ -26,22 +27,25 @@ if ! wifi_on; then
 fi
 
 _tmp="${CACHE}/download.png"
-_flags="-q -T 45 -O"
+rm -f "${_tmp}"
+_flags="-T 45 -U KindleCalendar/1.0 -O"
 if [ "${WGET_INSECURE}" = "1" ]; then
-	_flags="-q -T 45 --no-check-certificate -O"
+	_flags="-T 45 --no-check-certificate -U KindleCalendar/1.0 -O"
 fi
 
+/usr/sbin/eips 1 2 "descargando..." 2>/dev/null
+log "update: wget ${CALENDAR_URL}"
 # shellcheck disable=SC2086
-if wget ${_flags} "${_tmp}" "${CALENDAR_URL}" 2>/dev/null \
+if wget ${_flags} "${_tmp}" "${CALENDAR_URL}" >> "${LOG}" 2>&1 \
 	&& [ -s "${_tmp}" ]; then
 	_sz=$(wc -c < "${_tmp}" 2>/dev/null | tr -cd '0-9')
-	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ]; then
+	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ] && is_png "${_tmp}"; then
 		mv "${_tmp}" "${IMG}"
 		cp -f "${IMG}" /mnt/us/documents/calendar.png 2>/dev/null
 		log "update: ok bytes=${_sz}"
 		_ok=1
 	else
-		log "update: file too small"
+		log "update: bad download bytes=${_sz:-0} (need png >500B)"
 		rm -f "${_tmp}"
 		_ok=0
 	fi
@@ -53,6 +57,7 @@ fi
 wifi_off
 
 if [ "${_ok}" = "1" ]; then
+	/usr/sbin/eips 1 2 "mostrando..." 2>/dev/null
 	display_image "${IMG}"
 	exit 0
 fi
