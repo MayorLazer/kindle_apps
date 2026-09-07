@@ -150,12 +150,24 @@ wifi_off() {
 	lipc-set-prop com.lab126.cmd wirelessEnable 0 2>/dev/null
 }
 
+# A download can outlast the idle timer, which would drop us into the
+# screensaver right after the calendar is drawn.
+keep_awake() {
+	lipc-set-prop com.lab126.powerd preventScreenSaver 1 2>/dev/null
+}
+
+allow_sleep() {
+	lipc-set-prop com.lab126.powerd preventScreenSaver 0 2>/dev/null
+}
+
 # UI processes that repaint the framebuffer (KUAL's "book cover", home grid, chrome).
 # cvm = Java framework (older FW), mesquite = newer FW. Freeze whichever exists.
 UI_PROCS="cvm mesquite"
 
 lock_ui() {
-	# Do not set preventScreenSaver: power button must still fire so wait-exit can Salir.
+	# Safe to block the screensaver: wait-exit reads raw input, so a power press
+	# or tap still exits, and EXIT_TIMEOUT_MIN restores the UI regardless.
+	lipc-set-prop com.lab126.powerd preventScreenSaver 1 2>/dev/null
 	lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
 	for _p in ${UI_PROCS}; do
 		if killall -STOP "${_p}" 2>/dev/null; then

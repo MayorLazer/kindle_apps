@@ -35,14 +35,20 @@ _track() {
 	_pids="${_pids} $1"
 }
 
-# Any input event (touch, page turn, power) closes the view. One 16-byte
-# input_event record is enough; dd blocks until something happens.
+# Any input event (touch, page turn, power) closes the view. Keep reading in a
+# loop: the tap that launched us from KUAL can still be queued, and the grace
+# period below discards those without disabling the watcher.
 for _dev in /dev/input/event*; do
 	[ -r "${_dev}" ] || continue
 	(
-		if dd if="${_dev}" bs=16 count=1 >/dev/null 2>&1; then
-			echo "input" > "${CACHE}/exit.reason"
-		fi
+		while :; do
+			if dd if="${_dev}" bs=16 count=1 >/dev/null 2>&1; then
+				echo "input" > "${CACHE}/exit.reason"
+			else
+				exit 0
+			fi
+			sleep 1
+		done
 	) &
 	_track $!
 	log "wait-exit: watching ${_dev}"

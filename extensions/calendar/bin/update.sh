@@ -39,11 +39,17 @@ case "${CALENDAR_URL}" in
 		;;
 esac
 
+keep_awake
+
 /usr/sbin/eips 1 2 "wifi..." 2>/dev/null
 if ! wifi_on; then
 	/usr/sbin/eips 2 3 "Sin Wi-Fi" 2>/dev/null
 	log "update: wifi failed"
-	_img=$(find_image) && display_image "${_img}"
+	if _img=$(find_image); then
+		display_image "${_img}"
+		exit 1
+	fi
+	allow_sleep
 	exit 1
 fi
 
@@ -88,4 +94,5 @@ case "${CALENDAR_URL}" in
 		/usr/sbin/eips 2 7 "Pon curl o http://" 2>/dev/null
 		;;
 esac
+allow_sleep
 exit 1
