@@ -1,36 +1,44 @@
 #Requires -Version 5.1
-# Serve calendar.png over plain HTTP for the Kindle (BusyBox wget has no HTTPS).
+# Serve board PNGs over plain HTTP for the Kindle (BusyBox wget has no HTTPS).
 #
-# 1. Generate or download a PNG first (sync.ps1 / browser).
+# 1. Generate first (sync.ps1 / generate.py).
 # 2. Run this script, note the printed URL.
 # 3. On Kindle bin/config set:
 #      CALENDAR_URL="http://YOUR_PC_IP:8765/calendar.png"
-# 4. KUAL > Calendario > Actualizar y mostrar (Kindle on same Wi-Fi).
+#    Sibling views (today.png, weather.png, month.png) are derived from that URL.
+# 4. KUAL > Tablero > Hoy / Calendario / Clima / Mes > Actualizar y mostrar
 
 param(
   [int]$Port = 8765,
-  [string]$Png = "",
+  [string]$Dir = "",
   [switch]$FetchFromPages
 )
 
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $Png) { $Png = Join-Path $Here "output\calendar.png" }
+if (-not $Dir) { $Dir = Join-Path $Here "output" }
+$CalendarPng = Join-Path $Dir "calendar.png"
 
-if ($FetchFromPages -or -not (Test-Path $Png)) {
-  $url = "https://mayorlazer.github.io/kindle_apps/calendar.png"
-  Write-Host "Downloading $url ..."
-  $dir = Split-Path -Parent $Png
-  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-  Invoke-WebRequest -Uri $url -OutFile $Png -UseBasicParsing
+if ($FetchFromPages) {
+  Write-Host "Pages no longer hosts the calendar. Generate locally or use the private data repo."
 }
 
-if (-not (Test-Path $Png)) {
-  throw "No PNG at $Png. Run generate/sync first, or pass -FetchFromPages."
+if (-not (Test-Path $CalendarPng)) {
+  throw "No PNG at $CalendarPng. Run generate/sync first."
 }
 
-$bytes = [IO.File]::ReadAllBytes((Resolve-Path $Png))
-Write-Host "Serving $Png ($($bytes.Length) bytes) on port $Port"
+$allowed = @{
+  "/calendar.png" = "calendar.png"
+  "/calendar"     = "calendar.png"
+  "/today.png"    = "today.png"
+  "/today"        = "today.png"
+  "/weather.png"  = "weather.png"
+  "/weather"      = "weather.png"
+  "/month.png"    = "month.png"
+  "/month"        = "month.png"
+}
+
+Write-Host "Serving $Dir on port $Port"
 
 $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
   Where-Object { $_.IPAddress -notlike "127.*" -and $_.PrefixOrigin -ne "WellKnown" } |
@@ -62,12 +70,16 @@ while ($listener.IsListening) {
   $req = $ctx.Request
   $res = $ctx.Response
   $path = $req.Url.AbsolutePath.TrimEnd("/")
-  if ($path -eq "" -or $path -eq "/calendar.png" -or $path -eq "/calendar") {
+  if (-not $path) { $path = "/calendar.png" }
+  $name = $allowed[$path]
+  $file = if ($name) { Join-Path $Dir $name } else { $null }
+  if ($file -and (Test-Path $file)) {
+    $bytes = [IO.File]::ReadAllBytes((Resolve-Path $file))
     $res.StatusCode = 200
     $res.ContentType = "image/png"
     $res.ContentLength64 = $bytes.Length
     $res.OutputStream.Write($bytes, 0, $bytes.Length)
-    Write-Host "$(Get-Date -Format HH:mm:ss) $($req.RemoteEndPoint) OK $($bytes.Length)B"
+    Write-Host "$(Get-Date -Format HH:mm:ss) $($req.RemoteEndPoint) OK $name $($bytes.Length)B"
   } else {
     $res.StatusCode = 404
     $msg = [Text.Encoding]::UTF8.GetBytes("not found")

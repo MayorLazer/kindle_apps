@@ -88,6 +88,62 @@ class Config:
     compress_night: bool = True
     core_start_hour: int = 7
     core_end_hour: int = 23
+    weather_lat: float = -31.4241
+    weather_lon: float = -64.4978
+    weather_place: str = "Carlos Paz, Cordoba"
+
+
+FOOTER_H = 50
+
+
+def canvas_size(cfg: Config) -> tuple[int, int]:
+    """Layout size before png_rotate. Landscape boards draw at 1024x758."""
+    if cfg.png_rotate in (90, 270):
+        return cfg.png_height, cfg.png_width
+    return cfg.png_width, cfg.png_height
+
+
+def sibling_png(cfg: Config, name: str) -> Path:
+    return cfg.png_output.with_name(name)
+
+
+def save_kindle_png(cfg: Config, img: Image.Image, dest: Path | None = None) -> Path:
+    dest = dest or cfg.png_output
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if cfg.png_rotate:
+        img = img.rotate(cfg.png_rotate, expand=True)
+    img.save(dest, format="PNG", optimize=True)
+    return dest
+
+
+def draw_exit_footer(
+    d: ImageDraw.ImageDraw,
+    w: int,
+    h: int,
+    generated: datetime | None = None,
+    failed_feeds: int = 0,
+    extra: str = "",
+) -> None:
+    """Black SALIR bar shared by every board."""
+    footer_h = FOOTER_H
+    f_foot = pil_fonts(18, bold=True)
+    f_hint = pil_fonts(15, bold=False)
+    d.rectangle([0, h - footer_h, w, h], fill=0)
+    d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
+    hint = "Toca la pantalla o boton power"
+    if generated is not None:
+        hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
+    if extra:
+        hint = f"{hint}  -  {extra}"
+    if failed_feeds:
+        hint = f"{hint}  -  SIN DATOS: {failed_feeds} calendario(s)"
+    d.text(
+        (w // 2, h - footer_h + 27),
+        _fit_text(hint, f_hint, w - 40),
+        font=f_hint,
+        fill=255,
+        anchor="ma",
+    )
 
 
 @dataclass
@@ -143,6 +199,9 @@ def load_config(path: Path) -> Config:
         compress_night=bool(data.get("compress_night", True)),
         core_start_hour=int(data.get("core_start_hour", 7)),
         core_end_hour=int(data.get("core_end_hour", 23)),
+        weather_lat=float(data.get("weather_lat", -31.4241)),
+        weather_lon=float(data.get("weather_lon", -64.4978)),
+        weather_place=str(data.get("weather_place", "Carlos Paz, Cordoba")).strip() or "Carlos Paz, Cordoba",
     )
 
 
@@ -584,14 +643,11 @@ def draw_png(
     """
     # png_width/height describe the screen. For a rotated view the layout is
     # drawn sideways and rotated back at save time, so swap them here.
-    if cfg.png_rotate in (90, 270):
-        w, h = cfg.png_height, cfg.png_width
-    else:
-        w, h = cfg.png_width, cfg.png_height
+    w, h = canvas_size(cfg)
     img = Image.new("L", (w, h), 255)
     d = ImageDraw.Draw(img)
 
-    footer_h = 50
+    footer_h = FOOTER_H
     margin_l = 52  # hour labels
     margin_r = 16
     margin_t = 16
@@ -606,7 +662,6 @@ def draw_png(
     f_meta = pil_fonts(14, bold=False)
     f_chip = pil_fonts(13, bold=True)
     f_foot = pil_fonts(18, bold=True)
-    f_hint = pil_fonts(15, bold=False)
     f_task = pil_fonts(12, bold=True)
     f_task_meta = pil_fonts(11, bold=False)
 
@@ -838,27 +893,8 @@ def draw_png(
         d.line([gx, gy, gx + col_w, gy], fill=0, width=2)
         d.ellipse([gx - 3, gy - 3, gx + 3, gy + 3], fill=0)
 
-    # Footer: exit hint, generation stamp, and any missing-feed warning
-    d.rectangle([0, h - footer_h, w, h], fill=0)
-    d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
-    hint = "Toca la pantalla o boton power"
-    if generated is not None:
-        hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
-    if failed_feeds:
-        hint = f"{hint}  -  SIN DATOS: {failed_feeds} calendario(s)"
-    d.text(
-        (w // 2, h - footer_h + 27),
-        _fit_text(hint, f_hint, w - 40),
-        font=f_hint,
-        fill=255,
-        anchor="ma",
-    )
-
-    cfg.png_output.parent.mkdir(parents=True, exist_ok=True)
-    if cfg.png_rotate:
-        # PIL rotates counter-clockwise; 90 suits a Kindle stood on its right edge.
-        img = img.rotate(cfg.png_rotate, expand=True)
-    img.save(cfg.png_output, format="PNG", optimize=True)
+    draw_exit_footer(d, w, h, generated, failed_feeds)
+    save_kindle_png(cfg, img)
 
 
 def draw_pdf(cfg: Config, events: list[Ev], start: date) -> None:
@@ -960,6 +996,9 @@ def write_ci_config(path: Path) -> None:
     tz = os.environ.get("TIMEZONE", "America/Argentina/Buenos_Aires")
     days = os.environ.get("CALENDAR_DAYS", "14")
     extras = os.environ.get("EXTRAS_URL", "").strip()
+    weather_lat = os.environ.get("WEATHER_LAT", "-31.4241")
+    weather_lon = os.environ.get("WEATHER_LON", "-64.4978")
+    weather_place = os.environ.get("WEATHER_PLACE", "Carlos Paz, Cordoba")
     # Must match the framebuffer fbink reports. PW1/PW2 = 758x1024,
     # Touch/K4 = 600x800, PW3/PW4 = 1072x1448.
     png_w = os.environ.get("PNG_WIDTH", "758")
@@ -982,6 +1021,9 @@ def write_ci_config(path: Path) -> None:
         'png_output = "output/calendar.png"',
         "insecure_ssl = false",
         f'extras_url = "{extras.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"',
+        f"weather_lat = {weather_lat}",
+        f"weather_lon = {weather_lon}",
+        f'weather_place = "{weather_place.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"',
         "[screen]",
         "width_in = 3.58",
         "height_in = 4.82",
@@ -1037,13 +1079,29 @@ def main() -> None:
         raise SystemExit("No calendar data: every ICS source failed. Check ICS_URL / ICS_URLS.")
     cal = merge_calendars(blobs)
     start = date.today()
-    end = start + timedelta(days=cfg.days + 40)
-    events = collect_events(cal, start, end, tz)
+    month_start = start.replace(day=1)
+    if start.month == 12:
+        month_last = date(start.year, 12, 31)
+    else:
+        month_last = date(start.year, start.month + 1, 1) - timedelta(days=1)
+    end = max(start + timedelta(days=cfg.days + 40), month_last + timedelta(days=1))
+    events = collect_events(cal, month_start, end, tz)
     print(f"Parsed {len(events)} event instances in window.")
     tasks, birthdays = fetch_extras(cfg)
     events.extend(birthdays)
-    draw_png(cfg, events, start, tasks, birthdays, datetime.now(tz), failed_feeds)
+    generated = datetime.now(tz)
+
+    import boards
+
+    weather = boards.fetch_weather(cfg)
+    draw_png(cfg, events, start, tasks, birthdays, generated, failed_feeds)
     print(f"Wrote {cfg.png_output}")
+    today_path = boards.draw_today_png(cfg, events, start, tasks, birthdays, generated, failed_feeds, weather)
+    print(f"Wrote {today_path}")
+    weather_path = boards.draw_weather_png(cfg, weather, generated)
+    print(f"Wrote {weather_path}")
+    month_path = boards.draw_month_png(cfg, events, start, generated, failed_feeds)
+    print(f"Wrote {month_path}")
     draw_pdf(cfg, events, start)
     print(f"Wrote {cfg.output}")
 

@@ -9,6 +9,7 @@ on:
   push:
     paths:
       - "schedule/generate.py"
+      - "schedule/boards.py"
       - "schedule/requirements.txt"
       - ".github/workflows/calendar.yml"
 
@@ -56,6 +57,9 @@ jobs:
           PNG_WIDTH: ${{ vars.PNG_WIDTH }}
           PNG_HEIGHT: ${{ vars.PNG_HEIGHT }}
           PNG_ROTATE: ${{ vars.PNG_ROTATE }}
+          WEATHER_LAT: ${{ vars.WEATHER_LAT }}
+          WEATHER_LON: ${{ vars.WEATHER_LON }}
+          WEATHER_PLACE: ${{ vars.WEATHER_PLACE }}
         run: |
           if [ -z "$ICS_URL" ] && [ -z "$ICS_URLS" ]; then
             echo "Add repository secret ICS_URL (Google Calendar secret iCal address)."
@@ -73,7 +77,16 @@ jobs:
           export PNG_HEIGHT="${PNG_HEIGHT:-1024}"
           # 90 = landscape (Kindle stood on its right edge)
           export PNG_ROTATE="${PNG_ROTATE:-90}"
+          export WEATHER_LAT="${WEATHER_LAT:--31.4241}"
+          export WEATHER_LON="${WEATHER_LON:--64.4978}"
+          export WEATHER_PLACE="${WEATHER_PLACE:-Carlos Paz, Cordoba}"
           python schedule/generate.py --from-env --config schedule/config.ci.toml
+          for f in calendar.png today.png weather.png month.png; do
+            if [ ! -s "schedule/output/$f" ]; then
+              echo "Missing schedule/output/$f"
+              exit 1
+            fi
+          done
 
       # The calendar holds personal events, tasks and contacts' birthdays, so
       # it goes to a private repo. This repo is public: nothing generated here
@@ -95,7 +108,9 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/data_key -o IdentitiesOnly=yes"
 
           rm -rf dist && mkdir dist
-          cp schedule/output/calendar.png schedule/output/calendar.pdf dist/
+          cp schedule/output/calendar.png schedule/output/today.png \
+             schedule/output/weather.png schedule/output/month.png \
+             schedule/output/calendar.pdf dist/
           date -u +"%Y-%m-%dT%H:%M:%SZ" > dist/updated.txt
           cd dist
           # A fresh orphan commit force-pushed every run keeps the data repo at
@@ -107,7 +122,7 @@ jobs:
           git add -A
           git commit -q -m "calendar $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push -q --force "git@github.com:${DATA_REPO}.git" dist:dist
-          echo "Pushed calendar.png + calendar.pdf to ${DATA_REPO} (branch dist)"
+          echo "Pushed board PNGs + calendar.pdf to ${DATA_REPO} (branch dist)"
 
       # Overwrites the previously published site, so the old public
       # calendar.png / calendar.pdf stop resolving.

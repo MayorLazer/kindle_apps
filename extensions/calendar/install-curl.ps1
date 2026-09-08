@@ -116,6 +116,6 @@ if (-not (Test-Path $Cfg)) {
 
 Write-Host ""
 Write-Host "Done. Eject the Kindle safely, then:"
-Write-Host "  KUAL > Calendario > Actualizar y mostrar"
+Write-Host "  KUAL > Tablero > Hoy > Actualizar y mostrar"
 Write-Host ""
 Write-Host "If download still fails, re-run with: -Arch armv7"

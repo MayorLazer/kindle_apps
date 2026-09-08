@@ -30,6 +30,11 @@ insecure_ssl = false
 # See apps-script/Code.gs. Include the ?token=... part. Treat it as a secret.
 extras_url = ""
 
+# Open-Meteo (no API key). Used by Hoy + Clima. Defaults = Carlos Paz, Cordoba.
+weather_lat = -31.4241
+weather_lon = -64.4978
+weather_place = "Carlos Paz, Cordoba"
+
 ssh_host = ""
 ssh_port = 2222
 ssh_user = "root"

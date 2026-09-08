@@ -103,6 +103,9 @@ Optional **Variables** (Settings → Secrets → Variables):
 |----------|---------|
 | `TIMEZONE` | `America/Argentina/Buenos_Aires` |
 | `CALENDAR_DAYS` | `14` |
+| `WEATHER_LAT` | `-31.4241` |
+| `WEATHER_LON` | `-64.4978` |
+| `WEATHER_PLACE` | `Carlos Paz, Cordoba` |
 
 ### 4. Private delivery
 
@@ -114,9 +117,9 @@ a read-only token.
 Already configured (repo `kindle_calendar_data`, deploy key, `DATA_DEPLOY_KEY`
 secret and `DATA_REPO` variable). What the workflow does each run:
 
-1. Force-pushes `calendar.png`, `calendar.pdf` and `updated.txt` to branch
-   `dist` of the private repo, as a single orphan commit so a binary is not
-   accumulated every 4 hours.
+1. Force-pushes `calendar.png`, `today.png`, `weather.png`, `month.png`,
+   `calendar.pdf` and `updated.txt` to branch `dist` of the private repo, as
+   a single orphan commit so a binary is not accumulated every 4 hours.
 2. Deploys a placeholder GitHub Pages site, which keeps the old public
    `calendar.png` / `calendar.pdf` from resolving.
 
@@ -195,10 +198,10 @@ Requirements on the Kindle:
 ### 3. Use it
 
 1. Eject USB  
-2. **KUAL → Calendario → Actualizar y mostrar**  
-   (Wi‑Fi on → download PNG → Wi‑Fi off → display)  
+2. **KUAL → Tablero → Hoy / Calendario / Clima / Mes → Actualizar y mostrar**  
+   (Wi‑Fi on → download that PNG → Wi‑Fi off → display)  
 3. **Auto (refresca solo)** = same, then re-downloads every
-   `AUTO_REFRESH_MIN` minutes (default 240) for as long as the calendar
+   `AUTO_REFRESH_MIN` minutes (default 240) for as long as that view
    stays on screen. Exiting the view stops the loop, so it can never
    redraw over a book. Timers pause while the Kindle sleeps, so a refresh
    lands on wake rather than exactly on schedule.  
@@ -269,9 +272,10 @@ USB copy still works when the Kindle is plugged in.
 
 ## Recommended daily flow
 
-1. **GitHub Actions** rebuilds `calendar.png` every 4 hours  
-2. On the desk Kindle: **Actualizar y mostrar** once, or **Auto** to let it
-   refresh itself while it stays on screen  
+1. **GitHub Actions** rebuilds the four board PNGs every 4 hours  
+2. On the desk Kindle: **Tablero → Hoy** (or Clima / Mes / Calendario), then
+   **Actualizar y mostrar** once, or **Auto** to let it refresh while it
+   stays on screen  
 
 No PC required after the first GitHub + Kindle setup.
 
@@ -286,4 +290,4 @@ No PC required after the first GitHub + Kindle setup.
 - [ ] Read-only fine-grained token in Kindle `bin/config` as `CALENDAR_TOKEN`  
 - [ ] `extensions/calendar` on Kindle + `bin/config` with `CALENDAR_URL`  
 - [ ] FBInk present  
-- [ ] **Actualizar y mostrar** works once on Wi‑Fi  
+- [ ] **Tablero → Hoy → Actualizar y mostrar** works once on Wi‑Fi  

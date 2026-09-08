@@ -1,10 +1,11 @@
 #!/bin/sh
-# Shared helpers for Calendario KUAL extension.
+# Shared helpers for the Tablero KUAL extension (Hoy / Calendario / Clima / Mes).
 
 EXT="/mnt/us/extensions/calendar"
 BIN="${EXT}/bin"
 CACHE="${EXT}/cache"
 CONFIG="${BIN}/config"
+VIEW="calendar"
 IMG="${EXT}/calendar.png"
 LOG="${CACHE}/calendar.log"
 
@@ -39,6 +40,7 @@ load_config() {
 	: "${FBINK:=/mnt/us/libkh/bin/fbink}"
 	: "${CURL:=}"
 	: "${CALENDAR_TOKEN:=}"
+	: "${VIEW:=calendar}"
 	# Safety net: restore the UI even if no exit event ever arrives.
 	: "${EXIT_TIMEOUT_MIN:=120}"
 	# Auto refresh interval while the calendar stays on screen.
@@ -63,6 +65,8 @@ load_config() {
 		fi
 	done
 
+	set_view "${VIEW}"
+
 	if [ -z "${CURL}" ] || [ ! -f "${CURL}" ]; then
 		CURL=""
 		for c in \
@@ -78,6 +82,39 @@ load_config() {
 			fi
 		done
 	fi
+}
+
+# calendar | today | weather | month. IMG and the download URL follow the view.
+# CALENDAR_URL is the calendar.png address; siblings replace that filename.
+set_view() {
+	VIEW="$1"
+	case "${VIEW}" in
+		calendar|today|weather|month) ;;
+		*) VIEW="calendar" ;;
+	esac
+	IMG="${EXT}/${VIEW}.png"
+}
+
+view_label() {
+	case "${VIEW}" in
+		today) echo "hoy" ;;
+		weather) echo "clima" ;;
+		month) echo "mes" ;;
+		*) echo "calendario" ;;
+	esac
+}
+
+url_for_view() {
+	_url="${CALENDAR_URL}"
+	case "${_url}" in
+		*.png*)
+			# BusyBox sed: swap the PNG filename, keep ?query if any.
+			echo "${_url}" | sed "s#[^/?]*\\.png#${VIEW}.png#"
+			;;
+		*)
+			echo "${_url%/}/${VIEW}.png"
+			;;
+	esac
 }
 
 # PW4 stock BusyBox 1.17 wget: only -csq -O -P -U -Y; HTTP/FTP only (no HTTPS,
@@ -127,12 +164,21 @@ download_url() {
 }
 
 find_image() {
-	for c in "${IMG}" "/mnt/us/documents/calendar.png" "/mnt/us/calendar.png"; do
+	for c in "${IMG}" "/mnt/us/documents/${VIEW}.png" "/mnt/us/${VIEW}.png"; do
 		if [ -f "$c" ] && is_png "$c"; then
 			echo "$c"
 			return 0
 		fi
 	done
+	# Old USB drops only copied calendar.png; keep that fallback for the week view.
+	if [ "${VIEW}" = "calendar" ]; then
+		for c in "/mnt/us/documents/calendar.png" "/mnt/us/calendar.png"; do
+			if [ -f "$c" ] && is_png "$c"; then
+				echo "$c"
+				return 0
+			fi
+		done
+	fi
 	return 1
 }
 
@@ -297,7 +343,7 @@ draw_png() {
 display_image() {
 	_path="$1"
 	if [ -z "${_path}" ] || [ ! -f "${_path}" ]; then
-		/usr/sbin/eips 2 3 "Falta calendar.png" 2>/dev/null
+		/usr/sbin/eips 2 3 "Falta ${VIEW}.png" 2>/dev/null
 		log "display: missing path"
 		return 1
 	fi

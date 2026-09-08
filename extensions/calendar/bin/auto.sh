@@ -14,15 +14,17 @@ EXT="/mnt/us/extensions/calendar"
 . "${EXT}/bin/lib.sh"
 load_config
 
-# KUAL closes its menu shell right after launching us, which would take the
-# loop down with it. Re-launch detached and let the parent return at once.
-if [ "$1" != "--child" ]; then
+# KUAL: auto.sh today   |   child: auto.sh --child today
+if [ "$1" = "--child" ]; then
+	set_view "${2:-calendar}"
+else
+	set_view "${1:-calendar}"
 	if command -v nohup >/dev/null 2>&1; then
-		nohup /bin/sh "${BIN}/auto.sh" --child >> "${LOG}" 2>&1 &
+		nohup /bin/sh "${BIN}/auto.sh" --child "${VIEW}" >> "${LOG}" 2>&1 &
 	else
-		/bin/sh "${BIN}/auto.sh" --child >> "${LOG}" 2>&1 &
+		/bin/sh "${BIN}/auto.sh" --child "${VIEW}" >> "${LOG}" 2>&1 &
 	fi
-	log "auto: detached child"
+	log "auto: detached child view=${VIEW}"
 	exit 0
 fi
 
@@ -37,9 +39,9 @@ fi
 
 echo $$ > "${CACHE}/auto.pid"
 trap 'rm -f "${CACHE}/auto.pid" 2>/dev/null; log "auto: signal, stopping"; exit 0' HUP INT TERM
-log "auto: start every ${AUTO_REFRESH_MIN}min"
+log "auto: start view=${VIEW} every ${AUTO_REFRESH_MIN}min"
 
-/bin/sh "${BIN}/update.sh"
+/bin/sh "${BIN}/update.sh" "${VIEW}"
 
 # display_image paints from a background subshell, so the view takes a few
 # seconds to register. Without this wait the loop would quit immediately.
@@ -67,6 +69,6 @@ while :; do
 			exit 0
 		fi
 	done
-	log "auto: refresh"
-	/bin/sh "${BIN}/update.sh"
+	log "auto: refresh view=${VIEW}"
+	/bin/sh "${BIN}/update.sh" "${VIEW}"
 done

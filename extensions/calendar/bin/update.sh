@@ -1,16 +1,19 @@
 #!/bin/sh
-# Fetch latest calendar.png, then display.
+# Fetch one board PNG (calendar/today/weather/month), then display.
 # Wi-Fi is enabled only for the download, then turned off. No background loop.
 #
-# Note: stock Kindle BusyBox wget (1.17) cannot do HTTPS. For GitHub Pages use
-# curl (USBNet: /mnt/us/usbnet/bin/curl) or an http:// LAN URL (serve-http.ps1).
+# Usage: update.sh [view]
+# Note: stock Kindle BusyBox wget (1.17) cannot do HTTPS. For GitHub use
+# curl (USBNet) or an http:// LAN URL (serve-http.ps1).
 
 EXT="/mnt/us/extensions/calendar"
 # shellcheck disable=SC1091
 . "${EXT}/bin/lib.sh"
 load_config
+set_view "${1:-calendar}"
 
-/usr/sbin/eips 1 1 "actualizando..." 2>/dev/null
+_label=$(view_label)
+/usr/sbin/eips 1 1 "actualizando ${_label}..." 2>/dev/null
 
 if [ -z "${CALENDAR_URL}" ] || echo "${CALENDAR_URL}" | grep -q REPLACE; then
 	/usr/sbin/eips -c 2>/dev/null
@@ -20,7 +23,9 @@ if [ -z "${CALENDAR_URL}" ] || echo "${CALENDAR_URL}" | grep -q REPLACE; then
 	exit 1
 fi
 
-case "${CALENDAR_URL}" in
+_url=$(url_for_view)
+
+case "${_url}" in
 	https://*)
 		if [ -z "${CURL}" ] || [ ! -f "${CURL}" ]; then
 			/usr/sbin/eips 2 3 "HTTPS: falta curl" 2>/dev/null
@@ -58,15 +63,15 @@ fi
 
 _tmp="${CACHE}/download.png"
 /usr/sbin/eips 1 2 "descargando..." 2>/dev/null
-log "update: fetch ${CALENDAR_URL}"
+log "update: fetch ${_url}"
 
 _ok=0
-if download_url "${CALENDAR_URL}" "${_tmp}"; then
+if download_url "${_url}" "${_tmp}"; then
 	_sz=$(wc -c < "${_tmp}" 2>/dev/null | tr -cd '0-9')
 	if [ -n "${_sz}" ] && [ "${_sz}" -gt 500 ] && is_png "${_tmp}" && png_complete "${_tmp}"; then
 		mv "${_tmp}" "${IMG}"
-		cp -f "${IMG}" /mnt/us/documents/calendar.png 2>/dev/null
-		log "update: ok bytes=${_sz}"
+		cp -f "${IMG}" "/mnt/us/documents/${VIEW}.png" 2>/dev/null
+		log "update: ok view=${VIEW} bytes=${_sz}"
 		_ok=1
 	else
 		log "update: rejected download bytes=${_sz:-0}"
@@ -92,7 +97,7 @@ if [ -n "${_img}" ]; then
 fi
 
 /usr/sbin/eips 2 5 "Sin imagen" 2>/dev/null
-case "${CALENDAR_URL}" in
+case "${_url}" in
 	https://*)
 		/usr/sbin/eips 2 7 "Pon curl o http://" 2>/dev/null
 		;;

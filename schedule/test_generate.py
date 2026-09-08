@@ -166,5 +166,62 @@ class TestBirthdayBox(unittest.TestCase):
         self.assertEqual(two - one, generate.BDAY_ROW_H)
 
 
+class TestBoards(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.day = date(2026, 9, 7)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_weather_labels(self) -> None:
+        import boards
+
+        self.assertEqual(boards.weather_label(0), "Despejado")
+        self.assertEqual(boards.weather_label(61), "Lluvia")
+        self.assertEqual(boards.weather_label(None), "Sin datos")
+
+    def test_today_weather_month_match_screen(self) -> None:
+        import boards
+
+        cfg = make_config(self.tmp)
+        evs = [timed(self.day, 10, 0, 11, 30, "Turno medico")]
+        tasks = [Task("Pagar patente", self.day, "")]
+        bdays = [generate.Ev(start=self.day + timedelta(days=12), end=self.day + timedelta(days=13), summary="Cumple Ana", all_day=True)]
+        now = datetime(2026, 9, 7, 20, 25, tzinfo=TZ)
+        weather = boards.Weather(
+            place="Carlos Paz, Cordoba",
+            temp=18.4,
+            apparent=16.0,
+            humidity=55,
+            wind_kmh=12.0,
+            code=2,
+            daily=[
+                boards.DayForecast(self.day + timedelta(days=i), 12.0, 22.0, 2, 20, 0.0)
+                for i in range(7)
+            ],
+            ok=True,
+        )
+        today = boards.draw_today_png(cfg, evs, self.day, tasks, bdays, now, 0, weather)
+        clima = boards.draw_weather_png(cfg, weather, now)
+        month = boards.draw_month_png(cfg, evs + bdays, self.day, now, 0)
+        for path in (today, clima, month):
+            with Image.open(path) as img:
+                self.assertEqual(img.size, (758, 1024), path.name)
+                darkest, _ = img.convert("L").getextrema()
+                self.assertLess(darkest, 60, f"{path.name} looks blank")
+
+    def test_weather_failure_still_writes(self) -> None:
+        import boards
+
+        cfg = make_config(self.tmp)
+        dead = boards.Weather(place="Carlos Paz, Cordoba", ok=False)
+        path = boards.draw_weather_png(cfg, dead, datetime(2026, 9, 7, 20, 25, tzinfo=TZ))
+        self.assertTrue(path.is_file())
+        boards.draw_today_png(cfg, [], self.day, [], [], None, 0, dead)
+        self.assertTrue(cfg.png_output.with_name("today.png").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

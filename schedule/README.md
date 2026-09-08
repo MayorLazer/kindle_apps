@@ -9,10 +9,11 @@ Google Calendar (ICS)
 GitHub Actions (daily)  -->  calendar.png on GitHub Pages
         |
         v
-Kindle KUAL "Calendario"
-  Actualizar y mostrar  =  Wi-Fi on -> wget PNG -> Wi-Fi off -> FBInk
-  Mostrar (cache)       =  show last PNG
-  Detener               =  restore Home UI
+Kindle KUAL "Tablero"
+  Hoy / Calendario / Clima / Mes
+    Actualizar y mostrar  =  Wi-Fi on -> download that PNG -> Wi-Fi off -> FBInk
+    Mostrar (cache)       =  show last PNG for that view
+    Salir                 =  restore Home UI
 ```
 
 **Why not Google Apps Script?** Apps Script cannot reasonably render a Paperwhite-sized PNG. GitHub Actions runs the same Python generator and publishes the image.
@@ -49,10 +50,10 @@ WGET_INSECURE=1
 FBINK="/mnt/us/libkh/bin/fbink"
 ```
 
-3. KUAL → **Calendario**
-   - **Actualizar y mostrar** — download + display  
-   - **Mostrar (cache)** — offline display  
-   - **Detener** — exit  
+3. KUAL → **Tablero**
+   - **Hoy / Calendario / Clima / Mes** → **Actualizar y mostrar**
+   - **Mostrar (cache)** — offline
+   - **Salir** — back to Home
 
 ## 3) Local PC (optional)
 
@@ -65,7 +66,14 @@ powershell -ExecutionPolicy Bypass -File .\sync.ps1
 
 ## What you get
 
-The KUAL PNG is a **weekly timetable** (Mon–Fri by default):
+Four KUAL PNGs share one download path:
+
+- **Hoy** — date, weather line, today's events, tomorrow, tasks
+- **Calendario** — weekly timetable (Mon–Fri by default)
+- **Clima** — current conditions + 7-day forecast (Open-Meteo)
+- **Mes** — month wall with event lines
+
+The week view still includes:
 
 - Hour grid (08–22 configurable)
 - Event blocks with title, time, location

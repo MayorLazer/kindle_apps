@@ -59,6 +59,7 @@ if (-not $Python) { throw "Python not found. Install Python 3.11+." }
 
 $Pdf = Join-Path $Here "output\calendar.pdf"
 $Png = Join-Path $Here "output\calendar.png"
+$BoardNames = @("calendar.png", "today.png", "weather.png", "month.png")
 
 if (-not $SkipGenerate) {
   Write-Log "Using Python: $Python"
@@ -66,12 +67,18 @@ if (-not $SkipGenerate) {
   & $Python -m pip install --quiet "icalendar>=6" "recurring-ical-events>=3" "reportlab>=4" "Pillow>=10" "tzdata>=2024.1"
   if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
-  Write-Log "Generating PDF+PNG..."
+  Write-Log "Generating PDF+PNGs..."
   & $Python (Join-Path $Here "generate.py") --config $Config
   if ($LASTEXITCODE -ne 0) { throw "generate.py failed" }
 }
 
 if (-not (Test-Path $Png)) { throw "PNG not found at $Png (needed for KUAL)" }
+$BoardPngs = @(
+  foreach ($name in $BoardNames) {
+    $p = Join-Path $Here "output\$name"
+    if (Test-Path $p) { $p }
+  }
+)
 
 function Find-KindleRoot {
   param([string]$Hint)
@@ -93,9 +100,11 @@ function Find-KindleRoot {
 function Copy-ToKindlePaths {
   param([string]$Root)
   $copied = @()
-  $docPng = Join-Path $Root "documents\calendar.png"
-  Copy-Item -Force $Png $docPng
-  $copied += $docPng
+  foreach ($src in $BoardPngs) {
+    $docPng = Join-Path $Root "documents\$(Split-Path $src -Leaf)"
+    Copy-Item -Force $src $docPng
+    $copied += $docPng
+  }
 
   $extDir = Join-Path $Root "extensions\calendar"
   if (-not (Test-Path $extDir)) {
@@ -106,9 +115,11 @@ function Copy-ToKindlePaths {
     }
   }
   if (Test-Path $extDir) {
-    $extPng = Join-Path $extDir "calendar.png"
-    Copy-Item -Force $Png $extPng
-    $copied += $extPng
+    foreach ($src in $BoardPngs) {
+      $extPng = Join-Path $extDir (Split-Path $src -Leaf)
+      Copy-Item -Force $src $extPng
+      $copied += $extPng
+    }
     # Refresh scripts (LF-safe copy from repo)
     $srcBin = Join-Path $RepoRoot "extensions\calendar\bin"
     if (Test-Path $srcBin) {
@@ -146,17 +157,16 @@ if (-not [string]::IsNullOrWhiteSpace($SshHost)) {
     Write-Log "scp not found (install OpenSSH Client). Skipping Wi-Fi push."
   } else {
     Write-Log "Trying SCP to ${SshUser}@${SshHost}:${SshPort} ..."
-    $targets = @(
-      "/mnt/us/documents/calendar.png",
-      "/mnt/us/extensions/calendar/calendar.png"
-    )
     $ok = $false
-    foreach ($remote in $targets) {
-      $target = "{0}@{1}:{2}" -f $SshUser, $SshHost, $remote
-      & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $Png $target
-      if ($LASTEXITCODE -eq 0) {
-        Write-Log "SCP OK: $target"
-        $ok = $true
+    foreach ($src in $BoardPngs) {
+      $leaf = Split-Path $src -Leaf
+      foreach ($remoteDir in @("/mnt/us/documents", "/mnt/us/extensions/calendar")) {
+        $target = "{0}@{1}:{2}/{3}" -f $SshUser, $SshHost, $remoteDir, $leaf
+        & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $src $target
+        if ($LASTEXITCODE -eq 0) {
+          Write-Log "SCP OK: $target"
+          $ok = $true
+        }
       }
     }
     if ($ok) { $delivered = $true }
@@ -174,6 +184,6 @@ if (-not $delivered) {
 
 if (-not $Quiet) {
   Write-Host ""
-  Write-Host "On Kindle: KUAL > Calendario > Mostrar"
-  Write-Host "Exit:      KUAL > Calendario > Detener"
+  Write-Host "On Kindle: KUAL > Tablero > Hoy / Calendario / Clima / Mes"
+  Write-Host "Exit:      KUAL > Tablero > Salir"
 }

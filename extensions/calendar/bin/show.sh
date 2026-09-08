@@ -1,17 +1,20 @@
 #!/bin/sh
-# Show cached calendar.png (no network).
+# Show a cached board PNG (no network).
+# Usage: show.sh [view]
 
 EXT="/mnt/us/extensions/calendar"
 # shellcheck disable=SC1091
 . "${EXT}/bin/lib.sh"
 load_config
+set_view "${1:-calendar}"
 
-/usr/sbin/eips 1 1 "calendario..." 2>/dev/null
+_label=$(view_label)
+/usr/sbin/eips 1 1 "${_label}..." 2>/dev/null
 
 _img=$(find_image)
 if [ -z "${_img}" ]; then
 	/usr/sbin/eips -c 2>/dev/null
-	/usr/sbin/eips 2 3 "Falta calendar.png" 2>/dev/null
+	/usr/sbin/eips 2 3 "Falta ${VIEW}.png" 2>/dev/null
 	/usr/sbin/eips 2 5 "Usa Actualizar y mostrar" 2>/dev/null
 	exit 1
 fi
