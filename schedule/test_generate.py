@@ -94,6 +94,27 @@ class TestFitText(unittest.TestCase):
         self.assertEqual(generate._fit_text("Corto", font, 500), "Corto")
 
 
+class TestScheduleWindow(unittest.TestCase):
+    def test_first_column_is_today(self) -> None:
+        wed = date(2026, 9, 9)
+        days = generate.schedule_window(wed, 5)
+        self.assertEqual(days[0], wed)
+        self.assertEqual(days, [
+            date(2026, 9, 9),
+            date(2026, 9, 10),
+            date(2026, 9, 11),
+            date(2026, 9, 12),
+            date(2026, 9, 13),
+        ])
+
+    def test_includes_weekend_when_today_is_friday(self) -> None:
+        fri = date(2026, 9, 11)
+        days = generate.schedule_window(fri, 5)
+        self.assertEqual(days[0], fri)
+        self.assertEqual(days[1].weekday(), 5)  # Saturday
+        self.assertEqual(days[2].weekday(), 6)  # Sunday
+
+
 class TestDrawPng(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()

@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File .\sync.ps1
 Four KUAL PNGs share one download path:
 
 - **Hoy** — date, weather line, today's events, tomorrow, tasks
-- **Calendario** — weekly timetable (Mon–Fri by default)
+- **Calendario** — timetable from today forward (`schedule_days` columns)
 - **Clima** — current conditions + 7-day forecast (Open-Meteo)
 - **Mes** — month wall with event lines
 

@@ -350,6 +350,12 @@ def collect_events(cal: Calendar, start: date, end: date, tz: ZoneInfo) -> list[
     return out
 
 
+def schedule_window(start: date, n: int) -> list[date]:
+    """First column is today; the rest are the next days (weekends included)."""
+    n_days = max(1, min(int(n), 7))
+    return [start + timedelta(days=i) for i in range(n_days)]
+
+
 def events_on_day(events: list[Ev], day: date) -> list[Ev]:
     day_list: list[Ev] = []
     for e in events:
@@ -635,7 +641,7 @@ def draw_png(
     generated: datetime | None = None,
     failed_feeds: int = 0,
 ) -> None:
-    """Weekly timetable view (kindle_schedule-style) for KUAL.
+    """Timetable from today forward (kindle_schedule-style) for KUAL.
 
     `generated` is stamped in the footer and marks the current time on today's
     column: without it a cached image on the Kindle looks identical to a fresh
@@ -665,10 +671,8 @@ def draw_png(
     f_task = pil_fonts(12, bold=True)
     f_task_meta = pil_fonts(11, bold=False)
 
-    # Week starts Monday of current week
-    week_start = start - timedelta(days=start.weekday())
-    n_days = max(1, min(cfg.schedule_days, 7))
-    days = [week_start + timedelta(days=i) for i in range(n_days)]
+    days = schedule_window(start, cfg.schedule_days)
+    n_days = len(days)
 
     # All-day chips height
     max_allday = 0
@@ -898,7 +902,7 @@ def draw_png(
 
 
 def draw_pdf(cfg: Config, events: list[Ev], start: date) -> None:
-    """PDF: page 1 = same weekly timetable as PNG; following pages = agenda list."""
+    """PDF: page 1 = same timetable as PNG; following pages = agenda list."""
     from reportlab.lib.utils import ImageReader
 
     font = try_register_fonts()
