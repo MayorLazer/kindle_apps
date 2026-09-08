@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -92,6 +92,13 @@ class TestFitText(unittest.TestCase):
     def test_keeps_text_that_fits(self) -> None:
         font = generate.pil_fonts(18, bold=True)
         self.assertEqual(generate._fit_text("Corto", font, 500), "Corto")
+
+
+class TestLocalToday(unittest.TestCase):
+    def test_argentina_evening_is_still_monday(self) -> None:
+        """21:30 in Argentina is already Tuesday 00:30 UTC."""
+        utc_tue = datetime(2026, 9, 8, 0, 30, tzinfo=timezone.utc)
+        self.assertEqual(generate.local_today(TZ, utc_tue), date(2026, 9, 7))
 
 
 class TestScheduleWindow(unittest.TestCase):

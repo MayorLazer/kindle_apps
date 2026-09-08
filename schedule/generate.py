@@ -350,6 +350,15 @@ def collect_events(cal: Calendar, start: date, end: date, tz: ZoneInfo) -> list[
     return out
 
 
+def local_today(tz: ZoneInfo, now: datetime | None = None) -> date:
+    """Calendar 'today' in the configured zone, not the build machine's UTC date.
+
+    GitHub Actions is UTC. After 21:00 in Argentina that is already the next day,
+    so date.today() on the runner would shift the first column to martes.
+    """
+    return (now or datetime.now(tz)).astimezone(tz).date()
+
+
 def schedule_window(start: date, n: int) -> list[date]:
     """First column is today; the rest are the next days (weekends included)."""
     n_days = max(1, min(int(n), 7))
@@ -1082,7 +1091,7 @@ def main() -> None:
     if not blobs:
         raise SystemExit("No calendar data: every ICS source failed. Check ICS_URL / ICS_URLS.")
     cal = merge_calendars(blobs)
-    start = date.today()
+    start = local_today(tz)
     month_start = start.replace(day=1)
     if start.month == 12:
         month_last = date(start.year, 12, 31)
