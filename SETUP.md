@@ -206,7 +206,9 @@ Requirements on the Kindle:
    redraw over a book. Timers pause while the Kindle sleeps, so a refresh
    lands on wake rather than exactly on schedule.  
 4. **Mostrar (cache)** = offline  
-5. **Salir** (or power button) = back to Home  
+5. **Salir** (or a tap while the screen is awake) = back to Home.  
+   Power button and the idle timer use the **stock screensaver**; the board
+   comes back on wake. Screensaver is only held off during Wi-Fi / drawing.  
 
 The footer shows when the image was generated, so a stale cached calendar
 is recognisable. `SIN DATOS` there means a calendar feed failed during the

@@ -130,7 +130,7 @@ def draw_exit_footer(
     f_hint = pil_fonts(15, bold=False)
     d.rectangle([0, h - footer_h, w, h], fill=0)
     d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
-    hint = "Toca la pantalla o boton power"
+    hint = "Toca la pantalla para salir"
     if generated is not None:
         hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
     if extra:

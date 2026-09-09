@@ -1,11 +1,13 @@
 #!/bin/sh
-# After the calendar is on screen: wait for an exit signal, then restore the UI.
+# After the board is on screen: wait for an exit tap, then restore the UI.
 #
-# The framework is frozen while the calendar shows, so touch no longer reaches
-# KUAL. Exit therefore has to come from raw input events:
-#   - any touch / button (reads /dev/input/event*)
+# The home framework is frozen so it cannot paint over the image, but pillow
+# and powerd stay free: idle timeout and the power button still start the
+# stock screensaver. A tap while awake returns to Home. A tap that only
+# wakes the device is ignored so the board comes back.
+#
+# Other exits:
 #   - KUAL Salir or PC rescue (cache/STOP)
-#   - lipc power event, when lipc-wait-event exists
 #   - safety timeout, so the device can never get stuck
 
 EXT="/mnt/us/extensions/calendar"
@@ -29,7 +31,7 @@ _exit_now() {
 	exit 0
 }
 
-# A refresh kills the old waiter on purpose while the calendar stays on screen,
+# A refresh kills the old waiter on purpose while the board stays on screen,
 # so only release the framework when nothing is meant to be displayed.
 _on_signal() {
 	if [ ! -f "${CACHE}/showing.pid" ]; then
@@ -48,9 +50,9 @@ _track() {
 	_pids="${_pids} $1"
 }
 
-# Any input event (touch, page turn, power) closes the view. Keep reading in a
-# loop: the tap that launched us from KUAL can still be queued, and the grace
-# period below discards those without disabling the watcher.
+# Touch / page-turn closes the view. Power is left to powerd (screensaver).
+# Keep reading in a loop: the tap that launched us from KUAL can still be
+# queued, and the grace period below discards those without disabling the watcher.
 for _dev in /dev/input/event*; do
 	[ -r "${_dev}" ] || continue
 	(
@@ -66,25 +68,6 @@ for _dev in /dev/input/event*; do
 	_track $!
 	log "wait-exit: watching ${_dev}"
 done
-
-if [ -n "${LIPC_WAIT}" ]; then
-	(
-		_t0=$(_now)
-		"${LIPC_WAIT}" com.lab126.powerd powerButtonPressed >/dev/null 2>&1
-		_rc=$?
-		_t1=$(_now)
-		if [ "${_rc}" != "0" ]; then
-			log "wait-exit: power watcher unsupported (rc=${_rc})"
-			exit 0
-		fi
-		if [ -n "${_t0}" ] && [ -n "${_t1}" ] && [ "$((_t1 - _t0))" -lt 2 ]; then
-			log "wait-exit: power watcher returned instantly, ignoring"
-			exit 0
-		fi
-		echo "power" > "${CACHE}/exit.reason"
-	) &
-	_track $!
-fi
 
 _kill_watchers() {
 	for _p in ${_pids}; do
@@ -103,7 +86,32 @@ done
 
 _elapsed=0
 _limit=$((EXIT_TIMEOUT_MIN * 60))
+_ss=0
+_wake_until=0
+
 while true; do
+	if in_screensaver; then
+		if [ "${_ss}" != "1" ]; then
+			log "wait-exit: screensaver"
+			_ss=1
+		fi
+		rm -f "${CACHE}/exit.reason" 2>/dev/null
+	elif [ "${_ss}" = "1" ]; then
+		_ss=0
+		_t=$(_now)
+		if [ -n "${_t}" ]; then
+			_wake_until=$((_t + 4))
+		fi
+		log "wait-exit: woke, redraw"
+		redraw_showing
+		rm -f "${CACHE}/exit.reason" 2>/dev/null
+	fi
+
+	_t=$(_now)
+	if [ -n "${_t}" ] && [ "${_wake_until}" -gt 0 ] && [ "${_t}" -lt "${_wake_until}" ]; then
+		rm -f "${CACHE}/exit.reason" 2>/dev/null
+	fi
+
 	if [ -f "${CACHE}/STOP" ]; then
 		_kill_watchers
 		_exit_now stopfile
@@ -111,6 +119,15 @@ while true; do
 	if [ -f "${CACHE}/exit.reason" ]; then
 		_r=$(cat "${CACHE}/exit.reason" 2>/dev/null)
 		rm -f "${CACHE}/exit.reason"
+		# Power button is also an input event. If it started the screensaver,
+		# do not treat that as Salir.
+		if [ "${_r}" = "input" ]; then
+			sleep 1
+			if in_screensaver; then
+				log "wait-exit: input was power/sleep, ignoring"
+				continue
+			fi
+		fi
 		_kill_watchers
 		_exit_now "${_r:-event}"
 	fi

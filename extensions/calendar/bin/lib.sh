@@ -240,8 +240,7 @@ wifi_off() {
 	lipc-set-prop com.lab126.cmd wirelessEnable 0 2>/dev/null
 }
 
-# A download can outlast the idle timer, which would drop us into the
-# screensaver right after the calendar is drawn.
+# Hold off the idle screensaver only while Wi-Fi / drawing is in progress.
 keep_awake() {
 	lipc-set-prop com.lab126.powerd preventScreenSaver 1 2>/dev/null
 }
@@ -252,13 +251,12 @@ allow_sleep() {
 
 # UI processes that repaint the framebuffer (KUAL's "book cover", home grid, chrome).
 # cvm = Java framework (older FW), mesquite = newer FW. Freeze whichever exists.
+# Do not STOP pillow: that is the screensaver compositor.
 UI_PROCS="cvm mesquite"
 
 lock_ui() {
-	# Safe to block the screensaver: wait-exit reads raw input, so a power press
-	# or tap still exits, and EXIT_TIMEOUT_MIN restores the UI regardless.
-	lipc-set-prop com.lab126.powerd preventScreenSaver 1 2>/dev/null
-	lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+	# Freeze home so it cannot paint over the board, but leave powerd and
+	# pillow alone so the stock screensaver and sleep still run.
 	for _p in ${UI_PROCS}; do
 		if killall -STOP "${_p}" 2>/dev/null; then
 			log "lock_ui: stopped ${_p}"
@@ -270,9 +268,24 @@ unlock_ui() {
 	for _p in ${UI_PROCS}; do
 		killall -CONT "${_p}" 2>/dev/null
 	done
-	lipc-set-prop com.lab126.powerd preventScreenSaver 0 2>/dev/null
+	allow_sleep
 	lipc-set-prop com.lab126.pillow disableEnablePillow enable 2>/dev/null
 	lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home 2>/dev/null
+}
+
+in_screensaver() {
+	_st=$(lipc-get-prop com.lab126.powerd state 2>/dev/null || echo "")
+	case "${_st}" in
+		ScreenSaver|ReadyToSuspend|Suspended) return 0 ;;
+	esac
+	return 1
+}
+
+redraw_showing() {
+	_img=$(cat "${CACHE}/showing.path" 2>/dev/null)
+	[ -n "${_img}" ] && [ -f "${_img}" ] || return 0
+	log "redraw: ${_img}"
+	draw_png "${_img}" >/dev/null 2>&1
 }
 
 kill_auto() {
@@ -361,6 +374,7 @@ display_image() {
 	# Detach so KUAL can close first, then paint. Painting before the menu is gone
 	# lets the framework repaint its book cover on top of the calendar.
 	(
+		keep_awake
 		sleep 2
 		log "display: start ${_path}"
 		# Prove the image draws while the UI is still alive.
@@ -383,6 +397,7 @@ display_image() {
 			log "display: draw failed after lock"
 			exit 1
 		fi
+		echo "${_path}" > "${CACHE}/showing.path"
 		echo "1" > "${CACHE}/showing.pid"
 		start_waiter
 		sleep 1
@@ -391,7 +406,7 @@ display_image() {
 			# until the battery died.
 			log "display: waiter did not start, unlocking"
 			unlock_ui
-			rm -f "${CACHE}/showing.pid" 2>/dev/null
+			rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" 2>/dev/null
 			/usr/sbin/eips 2 3 "Error watcher, UI restaurada" 2>/dev/null
 			exit 1
 		fi
@@ -405,6 +420,8 @@ display_image() {
 			draw_png "${_path}" >/dev/null 2>&1
 		done
 		log "display: redraw pass done"
+		# Stock idle screensaver and power-sleep from here on.
+		allow_sleep
 	) >/dev/null 2>&1 &
 	return 0
 }
