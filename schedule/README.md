@@ -66,9 +66,10 @@ powershell -ExecutionPolicy Bypass -File .\sync.ps1
 
 ## What you get
 
-Four KUAL PNGs share one download path:
+Five KUAL PNGs share one download path:
 
 - **Hoy** — date, weather line, today's events, tomorrow, tasks
+- **Semanal** — week timetable + tasks + birthdays + weather
 - **Calendario** — timetable from today forward (`schedule_days` columns)
 - **Clima** — current conditions + 7-day forecast (Open-Meteo)
 - **Mes** — month wall with event lines

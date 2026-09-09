@@ -81,7 +81,7 @@ jobs:
           export WEATHER_LON="${WEATHER_LON:--64.4978}"
           export WEATHER_PLACE="${WEATHER_PLACE:-Carlos Paz, Cordoba}"
           python schedule/generate.py --from-env --config schedule/config.ci.toml
-          for f in calendar.png today.png weather.png month.png; do
+          for f in calendar.png weekly.png today.png weather.png month.png; do
             if [ ! -s "schedule/output/$f" ]; then
               echo "Missing schedule/output/$f"
               exit 1
@@ -108,9 +108,9 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/data_key -o IdentitiesOnly=yes"
 
           rm -rf dist && mkdir dist
-          cp schedule/output/calendar.png schedule/output/today.png \
-             schedule/output/weather.png schedule/output/month.png \
-             schedule/output/calendar.pdf dist/
+          cp schedule/output/calendar.png schedule/output/weekly.png \
+             schedule/output/today.png schedule/output/weather.png \
+             schedule/output/month.png schedule/output/calendar.pdf dist/
           date -u +"%Y-%m-%dT%H:%M:%SZ" > dist/updated.txt
           cd dist
           # A fresh orphan commit force-pushed every run keeps the data repo at

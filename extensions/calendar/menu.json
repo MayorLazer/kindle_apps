@@ -38,8 +38,41 @@
 					]
 				},
 				{
-					"name": "Calendario",
+					"name": "Semanal",
 					"priority": 2,
+					"items": [
+						{
+							"name": "Actualizar y mostrar",
+							"priority": 1,
+							"action": "/bin/sh",
+							"params": "/mnt/us/extensions/calendar/bin/update.sh weekly",
+							"exitmenu": true,
+							"refresh": false,
+							"status": false
+						},
+						{
+							"name": "Auto (refresca solo)",
+							"priority": 2,
+							"action": "/bin/sh",
+							"params": "/mnt/us/extensions/calendar/bin/auto.sh weekly",
+							"exitmenu": true,
+							"refresh": false,
+							"status": false
+						},
+						{
+							"name": "Mostrar (cache)",
+							"priority": 3,
+							"action": "/bin/sh",
+							"params": "/mnt/us/extensions/calendar/bin/show.sh weekly",
+							"exitmenu": true,
+							"refresh": false,
+							"status": false
+						}
+					]
+				},
+				{
+					"name": "Calendario",
+					"priority": 3,
 					"items": [
 						{
 							"name": "Actualizar y mostrar",
@@ -72,7 +105,7 @@
 				},
 				{
 					"name": "Clima",
-					"priority": 3,
+					"priority": 4,
 					"items": [
 						{
 							"name": "Actualizar y mostrar",
@@ -105,7 +138,7 @@
 				},
 				{
 					"name": "Mes",
-					"priority": 4,
+					"priority": 5,
 					"items": [
 						{
 							"name": "Actualizar y mostrar",

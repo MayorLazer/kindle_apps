@@ -232,13 +232,18 @@ class TestBoards(unittest.TestCase):
             ok=True,
         )
         today = boards.draw_today_png(cfg, evs, self.day, tasks, bdays, now, 0, weather)
+        weekly = boards.draw_weekly_png(cfg, evs, self.day, tasks, bdays, now, 0, weather)
         clima = boards.draw_weather_png(cfg, weather, now)
         month = boards.draw_month_png(cfg, evs + bdays, self.day, now, 0)
-        for path in (today, clima, month):
+        for path in (today, weekly, clima, month):
             with Image.open(path) as img:
                 self.assertEqual(img.size, (758, 1024), path.name)
                 darkest, _ = img.convert("L").getextrema()
                 self.assertLess(darkest, 60, f"{path.name} looks blank")
+        # Semanal must differ from the plain calendar (weather strip).
+        generate.draw_png(cfg, evs, self.day, tasks, bdays, now, 0)
+        with Image.open(cfg.png_output) as cal, Image.open(weekly) as wk:
+            self.assertNotEqual(cal.tobytes(), wk.tobytes())
 
     def test_weather_failure_still_writes(self) -> None:
         import boards

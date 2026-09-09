@@ -6,8 +6,8 @@
 # The calendar contains personal data, so it is served from a PRIVATE repo
 # through the GitHub API instead of a public URL. See SETUP.md.
 
-# calendar.png address. Hoy / Clima / Mes reuse this URL and swap the filename
-# (today.png, weather.png, month.png). Do not add a separate URL per view.
+# calendar.png address. Sibling views swap the filename
+# (weekly.png, today.png, weather.png, month.png). Do not add a URL per view.
 CALENDAR_URL="https://api.github.com/repos/OWNER/kindle_calendar_data/contents/calendar.png?ref=dist"
 
 # Fine-grained token, read-only, limited to the data repo above.

@@ -1,7 +1,7 @@
-"""Desk-board PNGs for the Kindle: Hoy, Clima, Mes.
+"""Desk-board PNGs for the Kindle: Hoy, Semanal, Clima, Mes.
 
-Calendar week grid stays in generate.draw_png. These three are glance
-views for the same data plus Open-Meteo weather. Never fatal: a missing
+Calendar week grid stays in generate.draw_png. Semanal is that grid plus
+weather; Hoy / Clima / Mes are glance views. Never fatal: a missing
 forecast still writes a PNG.
 """
 
@@ -215,6 +215,30 @@ def _event_lines(day_evs: list[g.Ev], limit: int) -> list[str]:
         if len(lines) >= limit:
             break
     return lines
+
+
+def draw_weekly_png(
+    cfg: g.Config,
+    events: list[g.Ev],
+    start: date,
+    tasks: list[g.Task] | None = None,
+    birthdays: list[g.Ev] | None = None,
+    generated: datetime | None = None,
+    failed_feeds: int = 0,
+    weather: Weather | None = None,
+) -> Path:
+    """Week timetable + tasks + birthdays + weather (Semanal board)."""
+    return g.draw_png(
+        cfg,
+        events,
+        start,
+        tasks,
+        birthdays,
+        generated,
+        failed_feeds,
+        weather=weather if weather is not None else Weather(place=cfg.weather_place, ok=False),
+        dest=g.sibling_png(cfg, "weekly.png"),
+    )
 
 
 def draw_today_png(

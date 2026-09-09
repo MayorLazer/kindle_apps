@@ -59,7 +59,7 @@ if (-not $Python) { throw "Python not found. Install Python 3.11+." }
 
 $Pdf = Join-Path $Here "output\calendar.pdf"
 $Png = Join-Path $Here "output\calendar.png"
-$BoardNames = @("calendar.png", "today.png", "weather.png", "month.png")
+$BoardNames = @("calendar.png", "weekly.png", "today.png", "weather.png", "month.png")
 
 if (-not $SkipGenerate) {
   Write-Log "Using Python: $Python"
@@ -184,6 +184,6 @@ if (-not $delivered) {
 
 if (-not $Quiet) {
   Write-Host ""
-  Write-Host "On Kindle: KUAL > Tablero > Hoy / Calendario / Clima / Mes"
+  Write-Host "On Kindle: KUAL > Tablero > Hoy / Semanal / Calendario / Clima / Mes"
   Write-Host "Exit:      KUAL > Tablero > Salir"
 }

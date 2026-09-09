@@ -89,7 +89,7 @@ load_config() {
 set_view() {
 	VIEW="$1"
 	case "${VIEW}" in
-		calendar|today|weather|month) ;;
+		calendar|today|weather|month|weekly) ;;
 		*) VIEW="calendar" ;;
 	esac
 	IMG="${EXT}/${VIEW}.png"
@@ -100,6 +100,7 @@ view_label() {
 		today) echo "hoy" ;;
 		weather) echo "clima" ;;
 		month) echo "mes" ;;
+		weekly) echo "semanal" ;;
 		*) echo "calendario" ;;
 	esac
 }

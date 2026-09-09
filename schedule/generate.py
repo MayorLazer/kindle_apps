@@ -615,6 +615,35 @@ def _birthday_box_h(rows: int) -> float:
     return 28 + 7 + rows * BDAY_ROW_H + 3
 
 
+def _draw_weather_sidebar(
+    d: ImageDraw.ImageDraw,
+    weather: object,
+    box: tuple[float, float, float, float],
+    fonts: dict[str, ImageFont.ImageFont],
+) -> float:
+    """Compact CLIMA block for the Semanal sidebar. Returns drawn height."""
+    import boards  # local: boards imports generate
+
+    x0, y0, x1, y1 = box
+    h = min(y1 - y0, 118.0)
+    y1 = y0 + h
+    d.rectangle([x0, y0, x1, y1], outline=0, width=1, fill=250)
+    d.rectangle([x0, y0, x1, y0 + 28], fill=0)
+    d.text(((x0 + x1) / 2, y0 + 5), "CLIMA", font=fonts["head"], fill=255, anchor="ma")
+
+    ok = bool(getattr(weather, "ok", False))
+    temp = boards.fmt_temp(getattr(weather, "temp", None)) if ok else "-- C"
+    label = boards.weather_label(getattr(weather, "code", None)) if ok else "Sin datos"
+    place = str(getattr(weather, "place", "") or "")
+    f_big = pil_fonts(28, bold=True)
+    d.text((x0 + 10, y0 + 36), temp, font=f_big, fill=0)
+    d.text((x0 + 10, y0 + 72), _fit_text(label, fonts["task"], x1 - x0 - 60), font=fonts["task"], fill=0)
+    if place:
+        d.text((x0 + 10, y0 + 90), _fit_text(place, fonts["meta"], x1 - x0 - 20), font=fonts["meta"], fill=90)
+    boards._draw_icon(d, (x1 - 52, y0 + 34, x1 - 8, y0 + 78), getattr(weather, "code", None) if ok else None)
+    return h
+
+
 def _draw_birthday_box(
     d: ImageDraw.ImageDraw,
     birthdays: list[Ev],
@@ -649,12 +678,16 @@ def draw_png(
     birthdays: list[Ev] | None = None,
     generated: datetime | None = None,
     failed_feeds: int = 0,
-) -> None:
+    weather: object | None = None,
+    dest: Path | None = None,
+) -> Path:
     """Timetable from today forward (kindle_schedule-style) for KUAL.
 
     `generated` is stamped in the footer and marks the current time on today's
     column: without it a cached image on the Kindle looks identical to a fresh
     one. `failed_feeds` warns that the grid is missing a calendar's events.
+    When `weather` is set (boards.Weather), each day header shows that day's
+    high/low and the sidebar gains a CLIMA box — used by Semanal / weekly.png.
     """
     # png_width/height describe the screen. For a rotated view the layout is
     # drawn sideways and rotated back at save time, so swap them here.
@@ -666,8 +699,9 @@ def draw_png(
     margin_l = 52  # hour labels
     margin_r = 16
     margin_t = 16
-    # Single-line day header ("Lun 07") so the hour rows get the space back.
-    header_h = 34
+    # Day header ("Lun 07"); weather mode adds a second line for high/low.
+    weather_on = weather is not None
+    header_h = 52 if weather_on else 34
     margin_l = 40 if (cfg.end_hour - cfg.start_hour) > 16 else margin_l
     allday_h = 0
 
@@ -679,6 +713,7 @@ def draw_png(
     f_foot = pil_fonts(18, bold=True)
     f_task = pil_fonts(12, bold=True)
     f_task_meta = pil_fonts(11, bold=False)
+    f_wx = pil_fonts(12, bold=False)
 
     days = schedule_window(start, cfg.schedule_days)
     n_days = len(days)
@@ -698,7 +733,7 @@ def draw_png(
     tasks = tasks or []
     bdays = sorted(birthdays or [], key=lambda e: e.start)
     sidebar_w = 0.0
-    if tasks or bdays:
+    if tasks or bdays or weather_on:
         sidebar_w = max(150.0, min(215.0, w * 0.21))
         grid_right -= sidebar_w + 10
 
@@ -760,11 +795,23 @@ def draw_png(
         frac = (mins - hi * 60) / 60.0
         return row_y[hi] + frac * (row_y[hi + 1] - row_y[hi])
 
-    # Day headers
+    # Day headers (+ per-day forecast when Semanal includes weather)
+    wx_by_day: dict[date, object] = {}
+    if weather_on and getattr(weather, "daily", None):
+        wx_by_day = {fc.day: fc for fc in weather.daily}  # type: ignore[union-attr]
+
     for i, day in enumerate(days):
         x = grid_left + i * col_w
         label = f"{WEEKDAYS_ES_SHORT[day.weekday()]} {day.day:02d}"
         d.text((x + col_w / 2, margin_t + 2), label, font=f_day, fill=0, anchor="ma")
+        if weather_on:
+            fc = wx_by_day.get(day)
+            if fc is not None and getattr(fc, "tmax", None) is not None:
+                hi = int(round(fc.tmax))  # type: ignore[union-attr]
+                lo = int(round(fc.tmin)) if getattr(fc, "tmin", None) is not None else "--"  # type: ignore[union-attr]
+                d.text((x + col_w / 2, margin_t + 26), f"{hi}/{lo}", font=f_wx, fill=80, anchor="ma")
+            elif weather_on:
+                d.text((x + col_w / 2, margin_t + 26), "--", font=f_wx, fill=140, anchor="ma")
         if day == start:
             d.rectangle([x + 8, margin_t - 2, x + col_w - 8, margin_t + header_h - 6], outline=0, width=2)
 
@@ -877,11 +924,17 @@ def draw_png(
         side_fonts = {"head": f_foot, "task": f_task, "meta": f_task_meta}
         side_x0 = w - margin_r - sidebar_w
         side_x1 = w - margin_r
+        side_top = margin_t
+
+        wx_h = 0.0
+        if weather_on:
+            wx_h = _draw_weather_sidebar(d, weather, (side_x0, side_top, side_x1, side_top + 118), side_fonts)
+            side_top += wx_h + 10
 
         # The birthday box takes only the height its rows need; tasks get the rest.
         bday_h = 0.0
         rows = len(bdays)
-        avail = grid_bottom - margin_t - (150.0 if tasks else 0.0)
+        avail = grid_bottom - side_top - (150.0 if tasks else 0.0)
         while rows > 0 and _birthday_box_h(rows) > avail:
             rows -= 1
         hidden = len(bdays) - rows
@@ -893,9 +946,9 @@ def draw_png(
 
         if tasks:
             tasks_bottom = grid_bottom - (bday_h + 10 if bday_h else 0)
-            _draw_task_sidebar(d, tasks, (side_x0, margin_t, side_x1, tasks_bottom), start, side_fonts)
+            _draw_task_sidebar(d, tasks, (side_x0, side_top, side_x1, tasks_bottom), start, side_fonts)
         if bday_h:
-            b_y0 = grid_bottom - bday_h if tasks else margin_t
+            b_y0 = grid_bottom - bday_h if tasks else side_top
             _draw_birthday_box(d, bdays[:rows], (side_x0, b_y0, side_x1, b_y0 + bday_h), side_fonts, hidden)
 
     # Now marker: the build time is "now" only on the day it was generated.
@@ -906,8 +959,11 @@ def draw_png(
         d.line([gx, gy, gx + col_w, gy], fill=0, width=2)
         d.ellipse([gx - 3, gy - 3, gx + 3, gy + 3], fill=0)
 
-    draw_exit_footer(d, w, h, generated, failed_feeds)
-    save_kindle_png(cfg, img)
+    extra = ""
+    if weather_on and not getattr(weather, "ok", False):
+        extra = "SIN DATOS: clima"
+    draw_exit_footer(d, w, h, generated, failed_feeds, extra)
+    return save_kindle_png(cfg, img, dest)
 
 
 def draw_pdf(cfg: Config, events: list[Ev], start: date) -> None:
@@ -1109,6 +1165,8 @@ def main() -> None:
     weather = boards.fetch_weather(cfg)
     draw_png(cfg, events, start, tasks, birthdays, generated, failed_feeds)
     print(f"Wrote {cfg.png_output}")
+    weekly_path = boards.draw_weekly_png(cfg, events, start, tasks, birthdays, generated, failed_feeds, weather)
+    print(f"Wrote {weekly_path}")
     today_path = boards.draw_today_png(cfg, events, start, tasks, birthdays, generated, failed_feeds, weather)
     print(f"Wrote {today_path}")
     weather_path = boards.draw_weather_png(cfg, weather, generated)

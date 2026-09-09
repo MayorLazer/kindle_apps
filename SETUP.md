@@ -117,9 +117,10 @@ a read-only token.
 Already configured (repo `kindle_calendar_data`, deploy key, `DATA_DEPLOY_KEY`
 secret and `DATA_REPO` variable). What the workflow does each run:
 
-1. Force-pushes `calendar.png`, `today.png`, `weather.png`, `month.png`,
-   `calendar.pdf` and `updated.txt` to branch `dist` of the private repo, as
-   a single orphan commit so a binary is not accumulated every 4 hours.
+1. Force-pushes `calendar.png`, `weekly.png`, `today.png`, `weather.png`,
+   `month.png`, `calendar.pdf` and `updated.txt` to branch `dist` of the
+   private repo, as a single orphan commit so a binary is not accumulated
+   every 4 hours.
 2. Deploys a placeholder GitHub Pages site, which keeps the old public
    `calendar.png` / `calendar.pdf` from resolving.
 
@@ -198,7 +199,7 @@ Requirements on the Kindle:
 ### 3. Use it
 
 1. Eject USB  
-2. **KUAL → Tablero → Hoy / Calendario / Clima / Mes → Actualizar y mostrar**  
+2. **KUAL → Tablero → Hoy / Semanal / Calendario / Clima / Mes → Actualizar y mostrar**  
    (Wi‑Fi on → download that PNG → Wi‑Fi off → display)  
 3. **Auto (refresca solo)** = same, then re-downloads every
    `AUTO_REFRESH_MIN` minutes (default 240) for as long as that view

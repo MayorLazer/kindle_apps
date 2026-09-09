@@ -30,6 +30,8 @@ if (-not (Test-Path $CalendarPng)) {
 $allowed = @{
   "/calendar.png" = "calendar.png"
   "/calendar"     = "calendar.png"
+  "/weekly.png"   = "weekly.png"
+  "/weekly"       = "weekly.png"
   "/today.png"    = "today.png"
   "/today"        = "today.png"
   "/weather.png"  = "weather.png"
