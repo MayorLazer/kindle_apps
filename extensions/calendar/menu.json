@@ -7,167 +7,47 @@
 				{
 					"name": "Hoy",
 					"priority": 1,
-					"items": [
-						{
-							"name": "Actualizar y mostrar",
-							"priority": 1,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/update.sh today",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Auto (refresca solo)",
-							"priority": 2,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/auto.sh today",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Mostrar (cache)",
-							"priority": 3,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/show.sh today",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						}
-					]
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/auto.sh today",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
 				},
 				{
 					"name": "Semanal",
 					"priority": 2,
-					"items": [
-						{
-							"name": "Actualizar y mostrar",
-							"priority": 1,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/update.sh weekly",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Auto (refresca solo)",
-							"priority": 2,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/auto.sh weekly",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Mostrar (cache)",
-							"priority": 3,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/show.sh weekly",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						}
-					]
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/auto.sh weekly",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
 				},
 				{
 					"name": "Calendario",
 					"priority": 3,
-					"items": [
-						{
-							"name": "Actualizar y mostrar",
-							"priority": 1,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/update.sh calendar",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Auto (refresca solo)",
-							"priority": 2,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/auto.sh calendar",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Mostrar (cache)",
-							"priority": 3,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/show.sh calendar",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						}
-					]
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/auto.sh calendar",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
 				},
 				{
 					"name": "Clima",
 					"priority": 4,
-					"items": [
-						{
-							"name": "Actualizar y mostrar",
-							"priority": 1,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/update.sh weather",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Auto (refresca solo)",
-							"priority": 2,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/auto.sh weather",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Mostrar (cache)",
-							"priority": 3,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/show.sh weather",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						}
-					]
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/auto.sh weather",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
 				},
 				{
 					"name": "Mes",
 					"priority": 5,
-					"items": [
-						{
-							"name": "Actualizar y mostrar",
-							"priority": 1,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/update.sh month",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Auto (refresca solo)",
-							"priority": 2,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/auto.sh month",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						},
-						{
-							"name": "Mostrar (cache)",
-							"priority": 3,
-							"action": "/bin/sh",
-							"params": "/mnt/us/extensions/calendar/bin/show.sh month",
-							"exitmenu": true,
-							"refresh": false,
-							"status": false
-						}
-					]
+					"action": "/bin/sh",
+					"params": "/mnt/us/extensions/calendar/bin/auto.sh month",
+					"exitmenu": true,
+					"refresh": false,
+					"status": false
 				},
 				{
 					"name": "Salir",

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Keep the board on screen and refresh it every AUTO_REFRESH_MIN minutes.
-# Unlike "Mostrar" / "Actualizar y mostrar", Auto holds off the screensaver
-# so a desk Kindle stays on the board until you tap or Salir.
+# Tablero menu entries launch this directly: download, show, stay awake,
+# then re-fetch on a timer until you tap or Salir.
 #
 # Quiet hours (QUIET_START_HOUR .. QUIET_END_HOUR) skip the Wi-Fi download
 # and keep the cached board on screen — no overnight radio wakeups.

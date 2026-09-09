@@ -188,7 +188,7 @@ FBINK="/mnt/us/libkh/bin/fbink"
 
 **Option C — USB/SCP only**
 
-Copy `calendar.png` with `sync.ps1` / USB, then **Mostrar (cache)** — no download.
+Copy `calendar.png` with `sync.ps1` / USB, then open the view from Tablero — no download.
 
 Requirements on the Kindle:
 
@@ -199,17 +199,15 @@ Requirements on the Kindle:
 ### 3. Use it
 
 1. Eject USB  
-2. **KUAL → Tablero → Hoy / Semanal / Calendario / Clima / Mes → Actualizar y mostrar**  
-   (Wi‑Fi on → download that PNG → Wi‑Fi off → display)  
-3. **Auto (refresca solo)** = same, then re-downloads every
+2. **KUAL → Tablero → Hoy / Semanal / Calendario / Clima / Mes**  
+   (Wi‑Fi on → download that PNG → Wi‑Fi off → display, then auto-refresh)  
+3. Each view entry runs **Auto**: re-downloads every
    `AUTO_REFRESH_MIN` minutes (default 240) for as long as that view
    stays on screen. Auto **keeps the screensaver off** so a desk Kindle
    stays on the board. Between `QUIET_START_HOUR` and `QUIET_END_HOUR`
    (default 0–7) it skips Wi‑Fi and keeps the cache. Exiting the view
    stops the loop, so it can never redraw over a book.  
-4. **Mostrar (cache)** = offline. Idle timeout and the power button use
-   the stock screensaver; the board comes back on wake.  
-5. **Salir** (or a tap while the screen is awake) = back to Home.
+4. **Salir** (or a tap while the screen is awake) = back to Home.
 
 The black footer shows generation time (and a rain alert when forecasted).
 After paint, the Kindle stamps **Bat % / WiFi / Act HH:MM / KO Nd** on the
@@ -280,9 +278,8 @@ USB copy still works when the Kindle is plugged in.
 ## Recommended daily flow
 
 1. **GitHub Actions** rebuilds the four board PNGs every 4 hours  
-2. On the desk Kindle: **Tablero → Hoy** (or Clima / Mes / Calendario), then
-   **Actualizar y mostrar** once, or **Auto** to let it refresh while it
-   stays on screen  
+2. On the desk Kindle: **Tablero → Semanal** (or Hoy / Clima / Mes / Calendario)
+   to download, show, and auto-refresh while it stays on screen  
 
 No PC required after the first GitHub + Kindle setup.
 
@@ -297,4 +294,4 @@ No PC required after the first GitHub + Kindle setup.
 - [ ] Read-only fine-grained token in Kindle `bin/config` as `CALENDAR_TOKEN`  
 - [ ] `extensions/calendar` on Kindle + `bin/config` with `CALENDAR_URL`  
 - [ ] FBInk present  
-- [ ] **Tablero → Hoy → Actualizar y mostrar** works once on Wi‑Fi  
+- [ ] **Tablero → Semanal** (or Hoy) works once on Wi‑Fi  

@@ -6,7 +6,7 @@
 # 3. On Kindle bin/config set:
 #      CALENDAR_URL="http://YOUR_PC_IP:8765/calendar.png"
 #    Sibling views (today.png, weather.png, month.png) are derived from that URL.
-# 4. KUAL > Tablero > Hoy / Calendario / Clima / Mes > Actualizar y mostrar
+# 4. KUAL > Tablero > Hoy / Semanal / Calendario / Clima / Mes
 
 param(
   [int]$Port = 8765,

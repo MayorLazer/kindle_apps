@@ -10,15 +10,15 @@ GitHub Actions (daily)  -->  calendar.png on GitHub Pages
         |
         v
 Kindle KUAL "Tablero"
-  Hoy / Calendario / Clima / Mes
-    Actualizar y mostrar  =  Wi-Fi on -> download that PNG -> Wi-Fi off -> FBInk
-    Mostrar (cache)       =  show last PNG for that view
-    Salir                 =  restore Home UI
+  Hoy / Semanal / Calendario / Clima / Mes
+    =  Wi-Fi on -> download PNG -> Wi-Fi off -> FBInk, then auto-refresh
+       (stays awake; quiet hours skip Wi-Fi)
+  Salir = restore Home UI
 ```
 
 **Why not Google Apps Script?** Apps Script cannot reasonably render a Paperwhite-sized PNG. GitHub Actions runs the same Python generator and publishes the image.
 
-**Why this avoids airplane-mode issues:** the Kindle only turns Wi‑Fi on for one short download when you tap **Actualizar**, then turns it off. No background loop.
+**Why this avoids airplane-mode issues:** Wi‑Fi turns on only for each refresh download, then off again. Quiet hours skip the radio entirely.
 
 ## 1) GitHub setup
 
@@ -51,8 +51,7 @@ FBINK="/mnt/us/libkh/bin/fbink"
 ```
 
 3. KUAL → **Tablero**
-   - **Hoy / Calendario / Clima / Mes** → **Actualizar y mostrar**
-   - **Mostrar (cache)** — offline
+   - **Hoy / Semanal / Calendario / Clima / Mes** — download, show, auto-refresh
    - **Salir** — back to Home
 
 ## 3) Local PC (optional)

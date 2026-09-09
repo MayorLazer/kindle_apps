@@ -15,7 +15,7 @@ _img=$(find_image)
 if [ -z "${_img}" ]; then
 	/usr/sbin/eips -c 2>/dev/null
 	/usr/sbin/eips 2 3 "Falta ${VIEW}.png" 2>/dev/null
-	/usr/sbin/eips 2 5 "Usa Actualizar y mostrar" 2>/dev/null
+	/usr/sbin/eips 2 5 "Usa Tablero > vista" 2>/dev/null
 	exit 1
 fi
 
