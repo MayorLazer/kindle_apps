@@ -1,0 +1,5 @@
+px=732
+py0=1005
+advance=8
+cell_h=16
+footer_h=56

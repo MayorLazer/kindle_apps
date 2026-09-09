@@ -485,31 +485,52 @@ status_line() {
 }
 
 stamp_status() {
-	# Never let footer chrome prevent the board from coming up.
+	# Blit pre-rotated glyphs into the PNG footer band (same strip as SALIR).
+	# Plain fbink text follows portrait axes and lands on the visual *side*
+	# of a landscape board — do not fall back to that.
 	[ -n "${FBINK}" ] && [ -f "${FBINK}" ] || return 0
 	_line=$(status_line 2>/dev/null) || _line=""
 	[ -n "${_line}" ] || return 0
 	log "status: ${_line}"
 
-	# Fixed PW coords — avoid `fbink -e` (can be slow/noisy on some builds).
-	# png_rotate=90 → landscape footer is the RIGHT edge of the FB.
-	_W=758
-	_H=1024
-	_rot=$(echo "${PNG_ROTATE}" | tr -cd '0-9')
-	: "${_rot:=0}"
+	_glyphs="${BIN}/glyphs"
+	_layout="${_glyphs}/layout.txt"
+	_widths="${_glyphs}/widths.txt"
+	[ -f "${_layout}" ] || {
+		log "status: missing glyphs/layout.txt"
+		return 0
+	}
 
-	if [ "${_rot}" = "90" ] || [ "${_rot}" = "270" ]; then
-		_x=$((_W - 20))
-		[ "${_x}" -lt 0 ] && _x=8
-		# Prefer 270 (matches PNG); ignore failures — board already painted.
-		"${FBINK}" -q -R 270 -x "${_x}" -y 16 "${_line}" >> "${LOG}" 2>&1 && return 0
-		"${FBINK}" -q -R 90 -x "${_x}" -y 16 "${_line}" >> "${LOG}" 2>&1 && return 0
-	fi
+	_px=$(sed -n 's/^px=//p' "${_layout}" | head -1 | tr -cd '0-9')
+	[ -n "${_px}" ] || {
+		log "status: bad glyphs layout"
+		return 0
+	}
 
-	_y=$((_H - 14))
-	[ "${_y}" -lt 0 ] && _y=0
-	"${FBINK}" -q -x 12 -Y "${_y}" "${_line}" >> "${LOG}" 2>&1 && return 0
-	"${FBINK}" -q -m -Y -12 "${_line}" >> "${LOG}" 2>&1
+	# Landscape x along the footer; portrait y = 1024 - lx - glyph_advance.
+	_lx=10
+	_land_w=1024
+	_i=0
+	_len=${#_line}
+	while [ "${_i}" -lt "${_len}" ]; do
+		_i=$((_i + 1))
+		_ch=$(printf '%s' "${_line}" | cut -c "${_i}-${_i}")
+		_code=$(printf '%02X' "'${_ch}")
+		_adv=8
+		if [ -f "${_widths}" ]; then
+			_w=$(awk -v c="${_code}" '$1 == c { print $2; exit }' "${_widths}")
+			[ -n "${_w}" ] && _adv="${_w}"
+		fi
+		_g="${_glyphs}/${_code}.png"
+		_py=$((_land_w - _lx - _adv))
+		if [ "${_py}" -lt 0 ]; then
+			break
+		fi
+		if [ -f "${_g}" ]; then
+			"${FBINK}" -q -g "file=${_g},x=${_px},y=${_py}" >> "${LOG}" 2>&1
+		fi
+		_lx=$((_lx + _adv))
+	done
 	return 0
 }
 

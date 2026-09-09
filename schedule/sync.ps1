@@ -131,6 +131,12 @@ function Copy-ToKindlePaths {
       Get-ChildItem -Path $srcBin -File | Where-Object { $_.Name -ne "config" } | ForEach-Object {
         Copy-Item -Force $_.FullName (Join-Path $extDir "bin\$($_.Name)")
       }
+      $glyphs = Join-Path $srcBin "glyphs"
+      if (Test-Path $glyphs) {
+        $destGlyphs = Join-Path $extDir "bin\glyphs"
+        New-Item -ItemType Directory -Force -Path $destGlyphs | Out-Null
+        Copy-Item -Force (Join-Path $glyphs "*") $destGlyphs
+      }
       Copy-Item -Force (Join-Path $RepoRoot "extensions\calendar\menu.json") $extDir
       Copy-Item -Force (Join-Path $RepoRoot "extensions\calendar\config.xml") $extDir
     }
@@ -185,6 +191,11 @@ if (-not [string]::IsNullOrWhiteSpace($SshHost)) {
         $target = "{0}@{1}:/mnt/us/extensions/calendar/bin/{2}" -f $SshUser, $SshHost, $_.Name
         & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $_.FullName $target
         if ($LASTEXITCODE -eq 0) { Write-Log "SCP OK: $target" }
+      }
+      $glyphs = Join-Path $srcBin "glyphs"
+      if (Test-Path $glyphs) {
+        & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q -r $glyphs "${SshUser}@${SshHost}:/mnt/us/extensions/calendar/bin/"
+        if ($LASTEXITCODE -eq 0) { Write-Log "SCP OK: glyphs/" }
       }
       foreach ($leaf in @("menu.json", "config.xml")) {
         $local = Join-Path $RepoRoot "extensions\calendar\$leaf"
