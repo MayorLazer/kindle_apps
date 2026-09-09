@@ -926,6 +926,10 @@ def draw_png(
         side_x1 = w - margin_r
         side_top = margin_t
 
+        # Paint the whole strip first so e-ink refresh always covers the sidebar
+        # (empty white gaps after CLIMA looked "unrendered" on the Kindle).
+        d.rectangle([side_x0, margin_t, side_x1, grid_bottom], outline=0, width=1, fill=248)
+
         wx_h = 0.0
         if weather_on:
             wx_h = _draw_weather_sidebar(d, weather, (side_x0, side_top, side_x1, side_top + 118), side_fonts)
@@ -947,6 +951,14 @@ def draw_png(
         if tasks:
             tasks_bottom = grid_bottom - (bday_h + 10 if bday_h else 0)
             _draw_task_sidebar(d, tasks, (side_x0, side_top, side_x1, tasks_bottom), start, side_fonts)
+        elif weather_on and not bday_h:
+            d.text(
+                ((side_x0 + side_x1) / 2, (side_top + grid_bottom) / 2),
+                "sin tareas",
+                font=f_task_meta,
+                fill=140,
+                anchor="mm",
+            )
         if bday_h:
             b_y0 = grid_bottom - bday_h if tasks else side_top
             _draw_birthday_box(d, bdays[:rows], (side_x0, b_y0, side_x1, b_y0 + bday_h), side_fonts, hidden)

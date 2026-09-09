@@ -268,6 +268,8 @@ after_display() {
 	else
 		rm -f "${CACHE}/stay_awake" 2>/dev/null
 		allow_sleep
+		# One-shot: allow the stock screensaver again now that painting is done.
+		lipc-set-prop com.lab126.pillow disableEnablePillow enable 2>/dev/null
 		log "after_display: screensaver allowed"
 	fi
 }
@@ -278,13 +280,15 @@ after_display() {
 UI_PROCS="cvm mesquite"
 
 lock_ui() {
-	# Freeze home so it cannot paint over the board, but leave powerd and
-	# pillow alone so the stock screensaver and sleep still run.
+	# Freeze home so it cannot paint over the board. Hold pillow off while we
+	# own the framebuffer; after_display re-enables it for one-shot show so the
+	# stock screensaver can still run.
 	for _p in ${UI_PROCS}; do
 		if killall -STOP "${_p}" 2>/dev/null; then
 			log "lock_ui: stopped ${_p}"
 		fi
 	done
+	lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
 }
 
 unlock_ui() {
@@ -308,7 +312,7 @@ redraw_showing() {
 	_img=$(cat "${CACHE}/showing.path" 2>/dev/null)
 	[ -n "${_img}" ] && [ -f "${_img}" ] || return 0
 	log "redraw: ${_img}"
-	draw_png "${_img}" >/dev/null 2>&1
+	draw_png "${_img}" clear >/dev/null 2>&1
 }
 
 kill_auto() {
@@ -346,9 +350,15 @@ waiter_alive() {
 }
 
 # Try FBInk image flags used across builds; fall back to eips -g.
+# Pass "clear" as $2 to wipe the framebuffer first — needed after KUAL/home
+# have painted, or e-ink leaves the right strip looking blank on redraws.
 draw_png() {
 	_img="$1"
+	_clear="${2:-}"
 	if [ -n "${FBINK}" ] && [ -f "${FBINK}" ]; then
+		if [ "${_clear}" = "clear" ]; then
+			"${FBINK}" -q -c -f >> "${LOG}" 2>&1
+		fi
 		# w=0,h=0 scales to the full screen, so a PNG built for the wrong
 		# resolution still covers the UI instead of cropping or leaving borders.
 		if "${FBINK}" -g "file=${_img},w=0,h=0" -f >> "${LOG}" 2>&1; then
@@ -370,6 +380,9 @@ draw_png() {
 		log "draw_png: no fbink at '${FBINK}'"
 	fi
 	# Last resort on some firmwares
+	if [ "${_clear}" = "clear" ]; then
+		/usr/sbin/eips -c 2>/dev/null
+	fi
 	if /usr/sbin/eips -g "${_img}" >> "${LOG}" 2>&1; then
 		return 0
 	fi
@@ -400,23 +413,18 @@ display_image() {
 		keep_awake
 		sleep 2
 		log "display: start ${_path}"
-		# Prove the image draws while the UI is still alive.
-		if ! draw_png "${_path}"; then
-			/usr/sbin/eips -c 2>/dev/null
-			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
-			/usr/sbin/eips 2 5 "Ver cache/calendar.log" 2>/dev/null
-			log "display: draw failed before lock"
-			allow_sleep
-			exit 1
-		fi
 
 		lock_ui
 		# From here the framework is frozen and only unlock_ui can bring it
 		# back, so never leave on a signal without releasing it.
 		trap 'log "display: signal after lock"; unlock_ui; exit 1' HUP INT TERM
-		if ! draw_png "${_path}"; then
+
+		# Clear + full flash so a previous home/KUAL paint cannot leave the
+		# sidebar (right strip on Semanal) looking blank after redraws.
+		if ! draw_png "${_path}" clear; then
 			unlock_ui
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
+			/usr/sbin/eips 2 5 "Ver cache/calendar.log" 2>/dev/null
 			log "display: draw failed after lock"
 			exit 1
 		fi
@@ -435,14 +443,13 @@ display_image() {
 		fi
 		log "display: ok ${_path}"
 
-		# Late repaints (KUAL cover, home chrome) can land after our draw; overwrite them.
-		for _d in 2 3 5; do
-			sleep "${_d}"
-			[ -f "${CACHE}/showing.pid" ] || exit 0
-			[ -f "${CACHE}/STOP" ] && exit 0
-			draw_png "${_path}" >/dev/null 2>&1
-		done
-		log "display: redraw pass done"
+		# One delayed clear+paint catches late KUAL/home chrome. Multiple
+		# flashes without a clear were blanking Semanal's light sidebar.
+		sleep 4
+		if [ -f "${CACHE}/showing.pid" ] && [ ! -f "${CACHE}/STOP" ]; then
+			draw_png "${_path}" clear >/dev/null 2>&1
+			log "display: final clear redraw done"
+		fi
 		after_display
 	) >/dev/null 2>&1 &
 	return 0
