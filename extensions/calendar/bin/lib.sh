@@ -240,13 +240,35 @@ wifi_off() {
 	lipc-set-prop com.lab126.cmd wirelessEnable 0 2>/dev/null
 }
 
-# Hold off the idle screensaver only while Wi-Fi / drawing is in progress.
+# Hold off the idle screensaver only while Wi-Fi / drawing is in progress,
+# or for the whole Auto session (STAY_AWAKE=1 / cache/stay_awake).
 keep_awake() {
 	lipc-set-prop com.lab126.powerd preventScreenSaver 1 2>/dev/null
 }
 
 allow_sleep() {
 	lipc-set-prop com.lab126.powerd preventScreenSaver 0 2>/dev/null
+}
+
+stay_awake_mode() {
+	[ "${STAY_AWAKE}" = "1" ] && return 0
+	[ -f "${CACHE}/stay_awake" ] && return 0
+	return 1
+}
+
+# After the board is painted: Auto keeps the screensaver off; one-shot show
+# lets the stock idle timeout and power button sleep as usual.
+after_display() {
+	if stay_awake_mode; then
+		echo "1" > "${CACHE}/stay_awake"
+		keep_awake
+		lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+		log "after_display: stay awake (auto)"
+	else
+		rm -f "${CACHE}/stay_awake" 2>/dev/null
+		allow_sleep
+		log "after_display: screensaver allowed"
+	fi
 }
 
 # UI processes that repaint the framebuffer (KUAL's "book cover", home grid, chrome).
@@ -420,8 +442,7 @@ display_image() {
 			draw_png "${_path}" >/dev/null 2>&1
 		done
 		log "display: redraw pass done"
-		# Stock idle screensaver and power-sleep from here on.
-		allow_sleep
+		after_display
 	) >/dev/null 2>&1 &
 	return 0
 }

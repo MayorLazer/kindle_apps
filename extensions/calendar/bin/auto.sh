@@ -1,9 +1,11 @@
 #!/bin/sh
-# Keep the calendar on screen and refresh it every AUTO_REFRESH_MIN minutes.
+# Keep the board on screen and refresh it every AUTO_REFRESH_MIN minutes.
+# Unlike "Mostrar" / "Actualizar y mostrar", Auto holds off the screensaver
+# so a desk Kindle stays on the board until you tap or Salir.
 #
-# It only runs while the calendar is actually displayed: as soon as you exit
-# the view (tap, power button, KUAL Salir) the loop stops. That way it can
-# never re-freeze the framework while you are reading a book.
+# It only runs while the board is actually displayed: as soon as you exit
+# the view (tap, KUAL Salir) the loop stops. That way it can never
+# re-freeze the framework while you are reading a book.
 #
 # Timers do not advance while the Kindle is suspended, so a refresh lands on
 # wake rather than exactly on the interval. Each refresh turns Wi-Fi on and
@@ -38,8 +40,10 @@ if [ -f "${CACHE}/auto.pid" ]; then
 fi
 
 echo $$ > "${CACHE}/auto.pid"
-trap 'rm -f "${CACHE}/auto.pid" 2>/dev/null; log "auto: signal, stopping"; exit 0' HUP INT TERM
-log "auto: start view=${VIEW} every ${AUTO_REFRESH_MIN}min"
+trap 'rm -f "${CACHE}/auto.pid" "${CACHE}/stay_awake" 2>/dev/null; log "auto: signal, stopping"; exit 0' HUP INT TERM
+export STAY_AWAKE=1
+echo "1" > "${CACHE}/stay_awake"
+log "auto: start view=${VIEW} every ${AUTO_REFRESH_MIN}min (stay awake)"
 
 /bin/sh "${BIN}/update.sh" "${VIEW}"
 
@@ -53,7 +57,7 @@ while [ "${_wait}" -lt 30 ]; do
 done
 if [ ! -f "${CACHE}/showing.pid" ]; then
 	log "auto: nothing on screen, stopping"
-	rm -f "${CACHE}/auto.pid" 2>/dev/null
+	rm -f "${CACHE}/auto.pid" "${CACHE}/stay_awake" 2>/dev/null
 	exit 1
 fi
 
@@ -65,7 +69,7 @@ while :; do
 		_slept=$((_slept + 10))
 		if [ ! -f "${CACHE}/showing.pid" ] || [ -f "${CACHE}/STOP" ]; then
 			log "auto: view closed, stopping"
-			rm -f "${CACHE}/auto.pid" 2>/dev/null
+			rm -f "${CACHE}/auto.pid" "${CACHE}/stay_awake" 2>/dev/null
 			exit 0
 		fi
 	done

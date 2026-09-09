@@ -202,13 +202,12 @@ Requirements on the Kindle:
    (Wi‑Fi on → download that PNG → Wi‑Fi off → display)  
 3. **Auto (refresca solo)** = same, then re-downloads every
    `AUTO_REFRESH_MIN` minutes (default 240) for as long as that view
-   stays on screen. Exiting the view stops the loop, so it can never
-   redraw over a book. Timers pause while the Kindle sleeps, so a refresh
-   lands on wake rather than exactly on schedule.  
-4. **Mostrar (cache)** = offline  
+   stays on screen. Auto **keeps the screensaver off** so a desk Kindle
+   stays on the board. Exiting the view stops the loop, so it can never
+   redraw over a book.  
+4. **Mostrar (cache)** = offline. Idle timeout and the power button use
+   the stock screensaver; the board comes back on wake.  
 5. **Salir** (or a tap while the screen is awake) = back to Home.  
-   Power button and the idle timer use the **stock screensaver**; the board
-   comes back on wake. Screensaver is only held off during Wi-Fi / drawing.  
 
 The footer shows when the image was generated, so a stale cached calendar
 is recognisable. `SIN DATOS` there means a calendar feed failed during the

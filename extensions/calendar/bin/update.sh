@@ -57,7 +57,11 @@ if ! wifi_on; then
 		display_image "${_img}"
 		exit 1
 	fi
-	allow_sleep
+	if stay_awake_mode && [ -f "${CACHE}/showing.pid" ]; then
+		after_display
+	else
+		allow_sleep
+	fi
 	exit 1
 fi
 
@@ -102,5 +106,9 @@ case "${_url}" in
 		/usr/sbin/eips 2 7 "Pon curl o http://" 2>/dev/null
 		;;
 esac
-allow_sleep
+if stay_awake_mode && [ -f "${CACHE}/showing.pid" ]; then
+	after_display
+else
+	allow_sleep
+fi
 exit 1

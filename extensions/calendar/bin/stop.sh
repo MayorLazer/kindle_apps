@@ -10,7 +10,7 @@ touch "${CACHE}/STOP" 2>/dev/null
 kill_auto
 kill_waiter
 unlock_ui
-rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" "${CACHE}/STOP" "${CACHE}/exit.reason" 2>/dev/null
+rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" "${CACHE}/stay_awake" "${CACHE}/STOP" "${CACHE}/exit.reason" 2>/dev/null
 
 /usr/sbin/eips -c 2>/dev/null
 /usr/sbin/eips 8 10 "Cerrado" 2>/dev/null
