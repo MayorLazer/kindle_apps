@@ -490,24 +490,40 @@ stamp_status() {
 	_line=$(status_line)
 	[ -n "${_line}" ] || return 0
 	log "status: ${_line}"
-	# Portrait bottom of the framebuffer; with png_rotate=90 the visual footer
-	# sits on the right edge, so rotate the stamp to match the board.
+
+	# png_rotate=90 puts the landscape footer on the RIGHT edge of the FB.
+	# Stand the Kindle on that edge → that strip is the visual bottom (SALIR).
+	# Stamp on the outer footer row (closer to the bezel), same reading dir as PNG.
+	_W=758
+	_H=1024
+	_eval=$("${FBINK}" -e 2>/dev/null)
+	_vw=$(printf '%s\n' "${_eval}" | sed -n 's/.*viewWidth=\([0-9][0-9]*\).*/\1/p' | head -1)
+	_vh=$(printf '%s\n' "${_eval}" | sed -n 's/.*viewHeight=\([0-9][0-9]*\).*/\1/p' | head -1)
+	[ -n "${_vw}" ] && _W="${_vw}"
+	[ -n "${_vh}" ] && _H="${_vh}"
+
 	_rot=$(echo "${PNG_ROTATE}" | tr -cd '0-9')
 	: "${_rot:=0}"
+
 	if [ "${_rot}" = "90" ] || [ "${_rot}" = "270" ]; then
-		# Near the physical footer (right edge when stood on the right side).
-		if "${FBINK}" -q -R 90 -x 4 -y 12 -h regular "${_line}" >> "${LOG}" 2>&1; then
-			return 0
-		fi
-		if "${FBINK}" -q -R "${_rot}" -x 4 -y 12 -h regular "${_line}" >> "${LOG}" 2>&1; then
-			return 0
-		fi
+		# Outer row of the ~56px footer strip (row 2 under SALIR / lluvia).
+		_x=$((_W - 20))
+		[ "${_x}" -lt 0 ] && _x=8
+		# FBInk -R is clockwise; PNG footer reads correctly with 270.
+		for _r in 270 90; do
+			if "${FBINK}" -q -R "${_r}" -x "${_x}" -y 16 -h regular "${_line}" >> "${LOG}" 2>&1; then
+				log "status: stamped rot=${_r} x=${_x} y=16"
+				return 0
+			fi
+		done
 	fi
-	# Fallback: last rows of the portrait buffer.
-	if "${FBINK}" -q -m -Y -12 -h regular "${_line}" >> "${LOG}" 2>&1; then
+
+	_y=$((_H - 14))
+	[ "${_y}" -lt 0 ] && _y=0
+	if "${FBINK}" -q -x 12 -Y "${_y}" -h regular "${_line}" >> "${LOG}" 2>&1; then
 		return 0
 	fi
-	"${FBINK}" -q -m -y -1 -h regular "${_line}" >> "${LOG}" 2>&1
+	"${FBINK}" -q -m -Y -12 -h regular "${_line}" >> "${LOG}" 2>&1
 }
 
 in_quiet_hours() {

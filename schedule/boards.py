@@ -168,10 +168,12 @@ def rain_alert(weather: Weather | None, today: date, threshold: int = 40) -> str
         rainy = weather_kind(fc.code) in ("drizzle", "rain", "storm")
         if wet or rainy:
             if pop:
-                parts.append(f"lluvia {label} {pop}%")
+                parts.append(f"{label} {pop}%")
             else:
-                parts.append(f"lluvia {label}")
-    return "  -  ".join(parts)
+                parts.append(label)
+    if not parts:
+        return ""
+    return "Lluvia " + " · ".join(parts)
 
 
 def _new_canvas(cfg: g.Config) -> tuple[Image.Image, ImageDraw.ImageDraw, int, int]:

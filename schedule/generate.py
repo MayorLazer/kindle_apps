@@ -93,7 +93,7 @@ class Config:
     weather_place: str = "Carlos Paz, Cordoba"
 
 
-FOOTER_H = 64
+FOOTER_H = 56
 
 
 def canvas_size(cfg: Config) -> tuple[int, int]:
@@ -124,27 +124,33 @@ def draw_exit_footer(
     failed_feeds: int = 0,
     extra: str = "",
 ) -> None:
-    """Black SALIR bar. Line 3 stays blank for the Kindle on-device status stamp."""
+    """Light footer (no black bar): exit + rain on row 1, status row blank for stamp.
+
+    Pre-rotate canvas coords. After png_rotate=90 the strip is the right edge of
+    the portrait PNG = visual bottom when the Kindle stands on that edge.
+    """
     footer_h = FOOTER_H
-    f_foot = pil_fonts(18, bold=True)
-    f_hint = pil_fonts(14, bold=False)
-    d.rectangle([0, h - footer_h, w, h], fill=0)
-    d.text((w // 2, h - footer_h + 4), "SALIR", font=f_foot, fill=255, anchor="ma")
-    hint = "Toca para salir"
+    y0 = h - footer_h
+    f_foot = pil_fonts(15, bold=True)
+    f_meta = pil_fonts(12, bold=False)
+
+    d.rectangle([0, y0, w, h], fill=255)
+    d.line([0, y0, w, y0], fill=0, width=1)
+
+    # Row 1: SALIR · Toca para salir · lluvia… (time kept short so rain fits)
+    bits: list[str] = ["Toca para salir"]
     if generated is not None:
-        hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
+        bits.insert(0, generated.strftime("%H:%M"))
     if extra:
-        hint = f"{hint}  -  {extra}"
+        bits.append(extra)
     if failed_feeds:
-        hint = f"{hint}  -  SIN DATOS: {failed_feeds} calendario(s)"
-    d.text(
-        (w // 2, h - footer_h + 26),
-        _fit_text(hint, f_hint, w - 40),
-        font=f_hint,
-        fill=255,
-        anchor="ma",
-    )
-    # Reserved strip for battery / Wi-Fi / KOReader stamped on-device after paint.
+        bits.append(f"SIN DATOS: {failed_feeds} cal")
+    meta = _fit_text("  ·  ".join(bits), f_meta, w - 78)
+
+    d.text((10, y0 + 5), "SALIR", font=f_foot, fill=0)
+    d.text((72, y0 + 7), meta, font=f_meta, fill=40)
+
+    # Row 2 left blank on purpose — Bat / WiFi / Act / KO stamped on-device.
 
 
 @dataclass
