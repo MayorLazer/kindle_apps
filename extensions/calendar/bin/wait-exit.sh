@@ -90,12 +90,24 @@ _ss=0
 _wake_until=0
 
 while true; do
+	if stay_awake_mode; then
+		hold_awake_tick
+	fi
 	if in_screensaver; then
-		if [ "${_ss}" != "1" ]; then
+		if stay_awake_mode; then
+			# Should not happen in Auto; shove powerd again and redraw.
+			log "wait-exit: screensaver during stay-awake, forcing awake"
+			hold_awake_tick
+			redraw_showing
+			_ss=0
+			rm -f "${CACHE}/exit.reason" 2>/dev/null
+		elif [ "${_ss}" != "1" ]; then
 			log "wait-exit: screensaver"
 			_ss=1
+			rm -f "${CACHE}/exit.reason" 2>/dev/null
+		else
+			rm -f "${CACHE}/exit.reason" 2>/dev/null
 		fi
-		rm -f "${CACHE}/exit.reason" 2>/dev/null
 	elif [ "${_ss}" = "1" ]; then
 		_ss=0
 		_t=$(_now)

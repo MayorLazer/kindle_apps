@@ -9,8 +9,10 @@ load_config
 touch "${CACHE}/STOP" 2>/dev/null
 kill_auto
 kill_waiter
-unlock_ui
-rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" "${CACHE}/stay_awake" "${CACHE}/STOP" "${CACHE}/exit.reason" 2>/dev/null
+# Clear stay-awake BEFORE restore so preventScreenSaver is released.
+rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" "${CACHE}/stay_awake" "${CACHE}/display.pid" "${CACHE}/exit.reason" 2>/dev/null
+restore_home
+rm -f "${CACHE}/STOP" 2>/dev/null
 
 /usr/sbin/eips -c 2>/dev/null
 /usr/sbin/eips 8 10 "Cerrado" 2>/dev/null

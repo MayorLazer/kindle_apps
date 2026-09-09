@@ -210,6 +210,22 @@ class TestBoards(unittest.TestCase):
         self.assertEqual(boards.weather_label(61), "Lluvia")
         self.assertEqual(boards.weather_label(None), "Sin datos")
 
+    def test_rain_alert_tomorrow(self) -> None:
+        import boards
+
+        day = date(2026, 9, 9)
+        weather = boards.Weather(
+            place="Carlos Paz, Cordoba",
+            ok=True,
+            daily=[
+                boards.DayForecast(day, 10.0, 20.0, 0, 10, 0.0),
+                boards.DayForecast(day + timedelta(days=1), 12.0, 18.0, 61, 60, 2.0),
+            ],
+        )
+        alert = boards.rain_alert(weather, day)
+        self.assertIn("manana", alert)
+        self.assertIn("60%", alert)
+
     def test_today_weather_month_match_screen(self) -> None:
         import boards
 

@@ -3,6 +3,9 @@
 # Unlike "Mostrar" / "Actualizar y mostrar", Auto holds off the screensaver
 # so a desk Kindle stays on the board until you tap or Salir.
 #
+# Quiet hours (QUIET_START_HOUR .. QUIET_END_HOUR) skip the Wi-Fi download
+# and keep the cached board on screen — no overnight radio wakeups.
+#
 # It only runs while the board is actually displayed: as soon as you exit
 # the view (tap, KUAL Salir) the loop stops. That way it can never
 # re-freeze the framework while you are reading a book.
@@ -43,9 +46,14 @@ echo $$ > "${CACHE}/auto.pid"
 trap 'rm -f "${CACHE}/auto.pid" "${CACHE}/stay_awake" 2>/dev/null; log "auto: signal, stopping"; exit 0' HUP INT TERM
 export STAY_AWAKE=1
 echo "1" > "${CACHE}/stay_awake"
-log "auto: start view=${VIEW} every ${AUTO_REFRESH_MIN}min (stay awake)"
+log "auto: start view=${VIEW} every ${AUTO_REFRESH_MIN}min quiet=${QUIET_START_HOUR}-${QUIET_END_HOUR} (stay awake)"
 
-/bin/sh "${BIN}/update.sh" "${VIEW}"
+if in_quiet_hours; then
+	log "auto: quiet hours, show cache only"
+	/bin/sh "${BIN}/show.sh" "${VIEW}"
+else
+	/bin/sh "${BIN}/update.sh" "${VIEW}"
+fi
 
 # display_image paints from a background subshell, so the view takes a few
 # seconds to register. Without this wait the loop would quit immediately.
@@ -72,7 +80,15 @@ while :; do
 			rm -f "${CACHE}/auto.pid" "${CACHE}/stay_awake" 2>/dev/null
 			exit 0
 		fi
+		# powerd forgets preventScreenSaver; re-assert often while Auto is up.
+		hold_awake_tick
 	done
+	if in_quiet_hours; then
+		log "auto: quiet hours, skip Wi-Fi refresh"
+		# Refresh the on-device footer (battery) without touching the network.
+		redraw_showing
+		continue
+	fi
 	log "auto: refresh view=${VIEW}"
 	/bin/sh "${BIN}/update.sh" "${VIEW}"
 done

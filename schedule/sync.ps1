@@ -73,12 +73,17 @@ if (-not $SkipGenerate) {
 }
 
 if (-not (Test-Path $Png)) { throw "PNG not found at $Png (needed for KUAL)" }
-$BoardPngs = @(
-  foreach ($name in $BoardNames) {
-    $p = Join-Path $Here "output\$name"
-    if (Test-Path $p) { $p }
-  }
-)
+$BoardPngs = @()
+$missing = @()
+foreach ($name in $BoardNames) {
+  $p = Join-Path $Here "output\$name"
+  if (Test-Path $p) { $BoardPngs += $p }
+  else { $missing += $name }
+}
+if ($missing.Count -gt 0) {
+  Write-Log ("WARNING: missing board PNG(s): " + ($missing -join ", "))
+}
+Write-Log ("Boards ready: {0}/{1}" -f $BoardPngs.Count, $BoardNames.Count)
 
 function Find-KindleRoot {
   param([string]$Hint)
@@ -158,17 +163,38 @@ if (-not [string]::IsNullOrWhiteSpace($SshHost)) {
   } else {
     Write-Log "Trying SCP to ${SshUser}@${SshHost}:${SshPort} ..."
     $ok = $false
+    $pushed = 0
     foreach ($src in $BoardPngs) {
       $leaf = Split-Path $src -Leaf
+      $boardOk = $false
       foreach ($remoteDir in @("/mnt/us/documents", "/mnt/us/extensions/calendar")) {
         $target = "{0}@{1}:{2}/{3}" -f $SshUser, $SshHost, $remoteDir, $leaf
         & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $src $target
         if ($LASTEXITCODE -eq 0) {
           Write-Log "SCP OK: $target"
           $ok = $true
+          $boardOk = $true
         }
       }
+      if ($boardOk) { $pushed++ }
     }
+    # Also refresh KUAL scripts over SCP when the extension folder exists.
+    $srcBin = Join-Path $RepoRoot "extensions\calendar\bin"
+    if ($ok -and (Test-Path $srcBin)) {
+      Get-ChildItem -Path $srcBin -File | Where-Object { $_.Name -ne "config" -and $_.Name -ne "curl" } | ForEach-Object {
+        $target = "{0}@{1}:/mnt/us/extensions/calendar/bin/{2}" -f $SshUser, $SshHost, $_.Name
+        & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $_.FullName $target
+        if ($LASTEXITCODE -eq 0) { Write-Log "SCP OK: $target" }
+      }
+      foreach ($leaf in @("menu.json", "config.xml")) {
+        $local = Join-Path $RepoRoot "extensions\calendar\$leaf"
+        if (-not (Test-Path $local)) { continue }
+        $target = "{0}@{1}:/mnt/us/extensions/calendar/{2}" -f $SshUser, $SshHost, $leaf
+        & scp -P $SshPort -o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=8" -q $local $target
+        if ($LASTEXITCODE -eq 0) { Write-Log "SCP OK: $target" }
+      }
+    }
+    Write-Log ("SCP boards pushed: {0}/{1}" -f $pushed, $BoardNames.Count)
     if ($ok) { $delivered = $true }
     else { Write-Log "SCP failed (Kindle asleep/offline?)." }
   }

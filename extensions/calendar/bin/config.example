@@ -28,3 +28,16 @@ EXIT_TIMEOUT_MIN=120
 # "Auto" menu entry: minutes between refreshes while the calendar is on
 # screen. Each refresh wakes Wi-Fi, so keep it long.
 AUTO_REFRESH_MIN=240
+
+# Auto skips Wi-Fi downloads in this local-hour window [start, end).
+# Set both to the same value to disable. Default: midnight .. 07:00.
+QUIET_START_HOUR=0
+QUIET_END_HOUR=7
+
+# Must match schedule screen.png_rotate so the footer stamp aligns.
+PNG_ROTATE=90
+
+# Optional: full path to KOReader statistics.sqlite3.
+# Leave empty to auto-detect under /mnt/us/koreader or /.adds/koreader.
+# Streak needs a sqlite3 binary (USBNet often has one).
+KOREADER_STATS_DB=""

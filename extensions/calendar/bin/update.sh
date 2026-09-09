@@ -76,6 +76,7 @@ if download_url "${_url}" "${_tmp}"; then
 		mv "${_tmp}" "${IMG}"
 		cp -f "${IMG}" "/mnt/us/documents/${VIEW}.png" 2>/dev/null
 		log "update: ok view=${VIEW} bytes=${_sz}"
+		mark_refreshed
 		_ok=1
 	else
 		log "update: rejected download bytes=${_sz:-0}"

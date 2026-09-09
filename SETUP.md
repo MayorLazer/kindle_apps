@@ -204,11 +204,16 @@ Requirements on the Kindle:
 3. **Auto (refresca solo)** = same, then re-downloads every
    `AUTO_REFRESH_MIN` minutes (default 240) for as long as that view
    stays on screen. Auto **keeps the screensaver off** so a desk Kindle
-   stays on the board. Exiting the view stops the loop, so it can never
-   redraw over a book.  
+   stays on the board. Between `QUIET_START_HOUR` and `QUIET_END_HOUR`
+   (default 0–7) it skips Wi‑Fi and keeps the cache. Exiting the view
+   stops the loop, so it can never redraw over a book.  
 4. **Mostrar (cache)** = offline. Idle timeout and the power button use
    the stock screensaver; the board comes back on wake.  
-5. **Salir** (or a tap while the screen is awake) = back to Home.  
+5. **Salir** (or a tap while the screen is awake) = back to Home.
+
+The black footer shows generation time (and a rain alert when forecasted).
+After paint, the Kindle stamps **Bat % / WiFi / Act HH:MM / KO Nd** on the
+footer strip. KOReader streak needs `sqlite3` on the device and a stats DB.  
 
 The footer shows when the image was generated, so a stale cached calendar
 is recognisable. `SIN DATOS` there means a calendar feed failed during the

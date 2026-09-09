@@ -45,10 +45,21 @@ load_config() {
 	: "${EXIT_TIMEOUT_MIN:=120}"
 	# Auto refresh interval while the calendar stays on screen.
 	: "${AUTO_REFRESH_MIN:=240}"
+	# Auto skips Wi-Fi refresh in this local-hour window [start, end).
+	: "${QUIET_START_HOUR:=0}"
+	: "${QUIET_END_HOUR:=7}"
+	# Match schedule png_rotate so the status stamp sits on the footer edge.
+	: "${PNG_ROTATE:=90}"
+	# Optional path to KOReader statistics.sqlite3 (auto-discovered if empty).
+	: "${KOREADER_STATS_DB:=}"
 	FBINK=$(echo "${FBINK}" | tr -d '\r')
 	CALENDAR_URL=$(echo "${CALENDAR_URL}" | tr -d '\r')
 	CURL=$(echo "${CURL}" | tr -d '\r')
 	CALENDAR_TOKEN=$(echo "${CALENDAR_TOKEN}" | tr -d '\r')
+	KOREADER_STATS_DB=$(echo "${KOREADER_STATS_DB}" | tr -d '\r')
+	PNG_ROTATE=$(echo "${PNG_ROTATE}" | tr -d '\r')
+	QUIET_START_HOUR=$(echo "${QUIET_START_HOUR}" | tr -d '\r')
+	QUIET_END_HOUR=$(echo "${QUIET_END_HOUR}" | tr -d '\r')
 
 	if [ ! -f "${FBINK}" ]; then
 		for c in /mnt/us/libkh/bin/fbink /mnt/us/extensions/MRInstaller/bin/K5/fbink; do
@@ -295,6 +306,23 @@ unlock_ui() {
 	for _p in ${UI_PROCS}; do
 		killall -CONT "${_p}" 2>/dev/null
 	done
+	if stay_awake_mode; then
+		# Auto refresh may kill an old display painter; do not release sleep
+		# hold or jump to Home over the board.
+		keep_awake
+		lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+		log "unlock_ui: stay-awake, skip Home"
+		return 0
+	fi
+	allow_sleep
+	lipc-set-prop com.lab126.pillow disableEnablePillow enable 2>/dev/null
+	lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home 2>/dev/null
+}
+
+restore_home() {
+	for _p in ${UI_PROCS}; do
+		killall -CONT "${_p}" 2>/dev/null
+	done
 	allow_sleep
 	lipc-set-prop com.lab126.pillow disableEnablePillow enable 2>/dev/null
 	lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home 2>/dev/null
@@ -312,7 +340,190 @@ redraw_showing() {
 	_img=$(cat "${CACHE}/showing.path" 2>/dev/null)
 	[ -n "${_img}" ] && [ -f "${_img}" ] || return 0
 	log "redraw: ${_img}"
+	if stay_awake_mode; then
+		keep_awake
+		lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+	fi
 	draw_png "${_img}" clear >/dev/null 2>&1
+	stamp_status
+}
+
+# powerd sometimes drops preventScreenSaver; Auto must poke it regularly.
+hold_awake_tick() {
+	stay_awake_mode || return 0
+	keep_awake
+	lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+}
+
+# --- On-device footer status (battery / Wi-Fi / last refresh / KOReader) ---
+
+battery_pct() {
+	_b=$(lipc-get-prop com.lab126.powerd battLevel 2>/dev/null | tr -cd '0-9')
+	if [ -n "${_b}" ]; then
+		echo "${_b}"
+		return 0
+	fi
+	for _f in \
+		/sys/devices/system/yoshi_battery/yoshi_battery0/battery_capacity \
+		/sys/class/power_supply/battery/capacity; do
+		if [ -f "${_f}" ]; then
+			tr -cd '0-9' < "${_f}"
+			return 0
+		fi
+	done
+	echo ""
+}
+
+wifi_label() {
+	_en=$(lipc-get-prop com.lab126.cmd wirelessEnable 2>/dev/null | tr -cd '0-9')
+	if [ "${_en}" = "0" ]; then
+		echo "WiFi off"
+		return 0
+	fi
+	_st=$(lipc-get-prop com.lab126.wifid cmState 2>/dev/null || echo "")
+	case "${_st}" in
+		CONNECTED|CONNECTED_PENDING) echo "WiFi on" ;;
+		*) echo "WiFi ..." ;;
+	esac
+}
+
+mark_refreshed() {
+	date +"%H:%M" > "${CACHE}/last_refresh.txt" 2>/dev/null
+}
+
+last_refresh_label() {
+	if [ -f "${CACHE}/last_refresh.txt" ]; then
+		_t=$(tr -d '\r\n' < "${CACHE}/last_refresh.txt")
+		[ -n "${_t}" ] && echo "Act ${_t}" && return 0
+	fi
+	echo "Act --:--"
+}
+
+find_koreader_db() {
+	if [ -n "${KOREADER_STATS_DB}" ] && [ -f "${KOREADER_STATS_DB}" ]; then
+		echo "${KOREADER_STATS_DB}"
+		return 0
+	fi
+	for _d in \
+		/mnt/us/koreader/settings/statistics.sqlite3 \
+		/mnt/us/.adds/koreader/settings/statistics.sqlite3 \
+		/mnt/us/koreader/statistics.sqlite3 \
+		/mnt/us/.adds/koreader/statistics.sqlite3; do
+		if [ -f "${_d}" ]; then
+			echo "${_d}"
+			return 0
+		fi
+	done
+	return 1
+}
+
+find_sqlite3() {
+	for _c in sqlite3 /mnt/us/usbnet/bin/sqlite3 /mnt/us/libkh/bin/sqlite3; do
+		if command -v "${_c}" >/dev/null 2>&1 || [ -x "${_c}" ]; then
+			echo "${_c}"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Consecutive local days with KOReader reading time (needs sqlite3 on device).
+koreader_streak() {
+	_sql=$(find_sqlite3) || return 1
+	_db=$(find_koreader_db) || return 1
+	_today=$(date +%Y-%m-%d)
+	_list=$(
+		"${_sql}" "${_db}" "
+			SELECT DISTINCT date(start_time, 'unixepoch', 'localtime') AS d
+			FROM page_stat_data WHERE duration > 0
+			ORDER BY d DESC LIMIT 40;
+		" 2>/dev/null
+	)
+	if [ -z "${_list}" ]; then
+		_list=$(
+			"${_sql}" "${_db}" "
+				SELECT DISTINCT date(start_time, 'unixepoch', 'localtime') AS d
+				FROM page_stat WHERE duration > 0
+				ORDER BY d DESC LIMIT 40;
+			" 2>/dev/null
+		)
+	fi
+	[ -n "${_list}" ] || return 1
+	_n=$(printf '%s\n' "${_list}" | awk -v today="${_today}" '
+		function jul(s,   x,y,m,d) {
+			split(s, x, "-"); y = x[1] + 0; m = x[2] + 0; d = x[3] + 0
+			if (m <= 2) { y--; m += 12 }
+			return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d
+		}
+		BEGIN { n = 0; prev = "" }
+		NF {
+			if (n == 0) {
+				if ($1 != today && jul(today) - jul($1) != 1) exit
+				n = 1; prev = $1; next
+			}
+			if (jul(prev) - jul($1) != 1) exit
+			n++; prev = $1
+		}
+		END { if (n > 0) print n }
+	')
+	[ -n "${_n}" ] && [ "${_n}" -gt 0 ] && echo "${_n}"
+}
+
+status_line() {
+	_bits=""
+	_b=$(battery_pct)
+	[ -n "${_b}" ] && _bits="${_bits}Bat ${_b}%"
+	_w=$(wifi_label)
+	[ -n "${_w}" ] && _bits="${_bits}  ${_w}"
+	_a=$(last_refresh_label)
+	[ -n "${_a}" ] && _bits="${_bits}  ${_a}"
+	_k=$(koreader_streak 2>/dev/null || true)
+	if [ -n "${_k}" ]; then
+		_bits="${_bits}  KO ${_k}d"
+	fi
+	# trim leading spaces
+	echo "${_bits}" | sed 's/^ *//'
+}
+
+stamp_status() {
+	[ -n "${FBINK}" ] && [ -f "${FBINK}" ] || return 0
+	_line=$(status_line)
+	[ -n "${_line}" ] || return 0
+	log "status: ${_line}"
+	# Portrait bottom of the framebuffer; with png_rotate=90 the visual footer
+	# sits on the right edge, so rotate the stamp to match the board.
+	_rot=$(echo "${PNG_ROTATE}" | tr -cd '0-9')
+	: "${_rot:=0}"
+	if [ "${_rot}" = "90" ] || [ "${_rot}" = "270" ]; then
+		# Near the physical footer (right edge when stood on the right side).
+		if "${FBINK}" -q -R 90 -x 4 -y 12 -h regular "${_line}" >> "${LOG}" 2>&1; then
+			return 0
+		fi
+		if "${FBINK}" -q -R "${_rot}" -x 4 -y 12 -h regular "${_line}" >> "${LOG}" 2>&1; then
+			return 0
+		fi
+	fi
+	# Fallback: last rows of the portrait buffer.
+	if "${FBINK}" -q -m -Y -12 -h regular "${_line}" >> "${LOG}" 2>&1; then
+		return 0
+	fi
+	"${FBINK}" -q -m -y -1 -h regular "${_line}" >> "${LOG}" 2>&1
+}
+
+in_quiet_hours() {
+	_h=$(date +%H | tr -cd '0-9')
+	[ -n "${_h}" ] || return 1
+	_h=$((_h + 0))
+	_qs=$((QUIET_START_HOUR + 0))
+	_qe=$((QUIET_END_HOUR + 0))
+	# Disabled when start == end.
+	[ "${_qs}" -eq "${_qe}" ] && return 1
+	if [ "${_qs}" -lt "${_qe}" ]; then
+		[ "${_h}" -ge "${_qs}" ] && [ "${_h}" -lt "${_qe}" ]
+	else
+		# Window wraps midnight, e.g. 22..7
+		[ "${_h}" -ge "${_qs}" ] || [ "${_h}" -lt "${_qe}" ]
+	fi
 }
 
 kill_auto() {
@@ -409,25 +620,38 @@ display_image() {
 
 	# Detach so KUAL can close first, then paint. Painting before the menu is gone
 	# lets the framework repaint its book cover on top of the calendar.
+	# Ignore HUP: update.sh/show.sh exit right after launching us; a HUP would
+	# otherwise run unlock_ui → allow_sleep and the screensaver would win.
+	if [ -f "${CACHE}/display.pid" ]; then
+		_oldd=$(cat "${CACHE}/display.pid" 2>/dev/null)
+		[ -n "${_oldd}" ] && kill "${_oldd}" 2>/dev/null
+		rm -f "${CACHE}/display.pid"
+	fi
 	(
+		trap '' HUP
+		echo $$ > "${CACHE}/display.pid"
 		keep_awake
+		if stay_awake_mode; then
+			lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null
+		fi
 		sleep 2
 		log "display: start ${_path}"
 
 		lock_ui
-		# From here the framework is frozen and only unlock_ui can bring it
-		# back, so never leave on a signal without releasing it.
-		trap 'log "display: signal after lock"; unlock_ui; exit 1' HUP INT TERM
+		# INT/TERM still restore the UI; HUP is ignored on purpose.
+		trap 'log "display: signal after lock"; rm -f "${CACHE}/display.pid"; unlock_ui; exit 1' INT TERM
 
 		# Clear + full flash so a previous home/KUAL paint cannot leave the
 		# sidebar (right strip on Semanal) looking blank after redraws.
 		if ! draw_png "${_path}" clear; then
+			rm -f "${CACHE}/display.pid"
 			unlock_ui
 			/usr/sbin/eips 2 3 "No se pudo dibujar" 2>/dev/null
 			/usr/sbin/eips 2 5 "Ver cache/calendar.log" 2>/dev/null
 			log "display: draw failed after lock"
 			exit 1
 		fi
+		stamp_status
 		echo "${_path}" > "${CACHE}/showing.path"
 		echo "1" > "${CACHE}/showing.pid"
 		start_waiter
@@ -436,8 +660,8 @@ display_image() {
 			# Nothing would watch for the exit tap: the UI would stay frozen
 			# until the battery died.
 			log "display: waiter did not start, unlocking"
+			rm -f "${CACHE}/display.pid" "${CACHE}/showing.pid" "${CACHE}/showing.path" 2>/dev/null
 			unlock_ui
-			rm -f "${CACHE}/showing.pid" "${CACHE}/showing.path" 2>/dev/null
 			/usr/sbin/eips 2 3 "Error watcher, UI restaurada" 2>/dev/null
 			exit 1
 		fi
@@ -448,9 +672,26 @@ display_image() {
 		sleep 4
 		if [ -f "${CACHE}/showing.pid" ] && [ ! -f "${CACHE}/STOP" ]; then
 			draw_png "${_path}" clear >/dev/null 2>&1
+			stamp_status
 			log "display: final clear redraw done"
 		fi
 		after_display
+		# Stay resident so Auto's keep_awake tick overlaps; powerd is also
+		# re-asserted by auto.sh every 10s while showing.
+		if stay_awake_mode; then
+			_i=0
+			while [ "${_i}" -lt 60 ]; do
+				[ -f "${CACHE}/showing.pid" ] || break
+				[ -f "${CACHE}/STOP" ] && break
+				# Replaced by a newer display painter.
+				_cur=$(cat "${CACHE}/display.pid" 2>/dev/null)
+				[ "${_cur}" = "$$" ] || break
+				hold_awake_tick
+				sleep 10
+				_i=$((_i + 1))
+			done
+		fi
+		rm -f "${CACHE}/display.pid" 2>/dev/null
 	) >/dev/null 2>&1 &
 	return 0
 }

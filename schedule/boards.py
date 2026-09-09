@@ -153,6 +153,27 @@ def fmt_temp(v: float | None) -> str:
     return f"{int(round(v))} C"
 
 
+def rain_alert(weather: Weather | None, today: date, threshold: int = 40) -> str:
+    """Short footer warning when rain is likely today or tomorrow."""
+    if weather is None or not weather.ok or not weather.daily:
+        return ""
+    by_day = {fc.day: fc for fc in weather.daily}
+    parts: list[str] = []
+    for label, day in (("hoy", today), ("manana", today + timedelta(days=1))):
+        fc = by_day.get(day)
+        if fc is None:
+            continue
+        pop = fc.pop if fc.pop is not None else 0
+        wet = pop >= threshold or (fc.precip is not None and fc.precip >= 0.5)
+        rainy = weather_kind(fc.code) in ("drizzle", "rain", "storm")
+        if wet or rainy:
+            if pop:
+                parts.append(f"lluvia {label} {pop}%")
+            else:
+                parts.append(f"lluvia {label}")
+    return "  -  ".join(parts)
+
+
 def _new_canvas(cfg: g.Config) -> tuple[Image.Image, ImageDraw.ImageDraw, int, int]:
     w, h = g.canvas_size(cfg)
     img = Image.new("L", (w, h), 255)
@@ -228,6 +249,7 @@ def draw_weekly_png(
     weather: Weather | None = None,
 ) -> Path:
     """Week timetable + tasks + birthdays + weather (Semanal board)."""
+    wx = weather if weather is not None else Weather(place=cfg.weather_place, ok=False)
     return g.draw_png(
         cfg,
         events,
@@ -236,8 +258,9 @@ def draw_weekly_png(
         birthdays,
         generated,
         failed_feeds,
-        weather=weather if weather is not None else Weather(place=cfg.weather_place, ok=False),
+        weather=wx,
         dest=g.sibling_png(cfg, "weekly.png"),
+        footer_extra=rain_alert(wx, start),
     )
 
 
@@ -353,10 +376,13 @@ def draw_today_png(
             by0 = y1 - bday_h if tasks else y0
             g._draw_birthday_box(d, bdays[:rows], (sx0, by0, sx1, by0 + bday_h), side_fonts, hidden)
 
-    extra = ""
+    extras: list[str] = []
     if weather is not None and not weather.ok:
-        extra = "SIN DATOS: clima"
-    g.draw_exit_footer(d, w, h, generated, failed_feeds, extra)
+        extras.append("SIN DATOS: clima")
+    alert = rain_alert(weather, start)
+    if alert:
+        extras.append(alert)
+    g.draw_exit_footer(d, w, h, generated, failed_feeds, "  -  ".join(extras))
     return g.save_kindle_png(cfg, img, g.sibling_png(cfg, "today.png"))
 
 

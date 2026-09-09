@@ -93,7 +93,7 @@ class Config:
     weather_place: str = "Carlos Paz, Cordoba"
 
 
-FOOTER_H = 50
+FOOTER_H = 64
 
 
 def canvas_size(cfg: Config) -> tuple[int, int]:
@@ -124,13 +124,13 @@ def draw_exit_footer(
     failed_feeds: int = 0,
     extra: str = "",
 ) -> None:
-    """Black SALIR bar shared by every board."""
+    """Black SALIR bar. Line 3 stays blank for the Kindle on-device status stamp."""
     footer_h = FOOTER_H
     f_foot = pil_fonts(18, bold=True)
-    f_hint = pil_fonts(15, bold=False)
+    f_hint = pil_fonts(14, bold=False)
     d.rectangle([0, h - footer_h, w, h], fill=0)
-    d.text((w // 2, h - footer_h + 6), "SALIR", font=f_foot, fill=255, anchor="ma")
-    hint = "Toca la pantalla para salir"
+    d.text((w // 2, h - footer_h + 4), "SALIR", font=f_foot, fill=255, anchor="ma")
+    hint = "Toca para salir"
     if generated is not None:
         hint = f"{generated.strftime('%d/%m %H:%M')}  -  {hint}"
     if extra:
@@ -138,12 +138,13 @@ def draw_exit_footer(
     if failed_feeds:
         hint = f"{hint}  -  SIN DATOS: {failed_feeds} calendario(s)"
     d.text(
-        (w // 2, h - footer_h + 27),
+        (w // 2, h - footer_h + 26),
         _fit_text(hint, f_hint, w - 40),
         font=f_hint,
         fill=255,
         anchor="ma",
     )
+    # Reserved strip for battery / Wi-Fi / KOReader stamped on-device after paint.
 
 
 @dataclass
@@ -680,6 +681,7 @@ def draw_png(
     failed_feeds: int = 0,
     weather: object | None = None,
     dest: Path | None = None,
+    footer_extra: str = "",
 ) -> Path:
     """Timetable from today forward (kindle_schedule-style) for KUAL.
 
@@ -971,10 +973,12 @@ def draw_png(
         d.line([gx, gy, gx + col_w, gy], fill=0, width=2)
         d.ellipse([gx - 3, gy - 3, gx + 3, gy + 3], fill=0)
 
-    extra = ""
+    extras: list[str] = []
+    if footer_extra:
+        extras.append(footer_extra)
     if weather_on and not getattr(weather, "ok", False):
-        extra = "SIN DATOS: clima"
-    draw_exit_footer(d, w, h, generated, failed_feeds, extra)
+        extras.append("SIN DATOS: clima")
+    draw_exit_footer(d, w, h, generated, failed_feeds, "  -  ".join(extras))
     return save_kindle_png(cfg, img, dest)
 
 
