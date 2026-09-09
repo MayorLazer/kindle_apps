@@ -37,7 +37,7 @@ QUIET_END_HOUR=7
 # Must match schedule screen.png_rotate so the footer stamp aligns.
 PNG_ROTATE=90
 
-# Optional: full path to KOReader statistics.sqlite3.
-# Leave empty to auto-detect under /mnt/us/koreader or /.adds/koreader.
-# Streak needs a sqlite3 binary (USBNet often has one).
+# Optional KOReader streak on the footer. Leave empty to skip (safer/faster).
+# Set to the full path of statistics.sqlite3 to enable; needs sqlite3 on device.
+# Example: KOREADER_STATS_DB="/mnt/us/koreader/settings/statistics.sqlite3"
 KOREADER_STATS_DB=""

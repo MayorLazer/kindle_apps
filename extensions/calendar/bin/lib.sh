@@ -428,25 +428,23 @@ find_sqlite3() {
 }
 
 # Consecutive local days with KOReader reading time (needs sqlite3 on device).
+# Must stay fast: a locked/huge DB must never block display startup.
 koreader_streak() {
 	_sql=$(find_sqlite3) || return 1
 	_db=$(find_koreader_db) || return 1
 	_today=$(date +%Y-%m-%d)
+	# Single short query; busy timeout so a locked DB cannot hang Auto.
 	_list=$(
-		"${_sql}" "${_db}" "
-			SELECT DISTINCT date(start_time, 'unixepoch', 'localtime') AS d
-			FROM page_stat_data WHERE duration > 0
-			ORDER BY d DESC LIMIT 40;
-		" 2>/dev/null
-	)
+		"${_sql}" -bail -cmd ".timeout 200" "${_db}" \
+			"SELECT DISTINCT date(start_time,'unixepoch','localtime') AS d FROM page_stat_data WHERE duration>0 ORDER BY d DESC LIMIT 40;" \
+			2>/dev/null
+	) || true
 	if [ -z "${_list}" ]; then
 		_list=$(
-			"${_sql}" "${_db}" "
-				SELECT DISTINCT date(start_time, 'unixepoch', 'localtime') AS d
-				FROM page_stat WHERE duration > 0
-				ORDER BY d DESC LIMIT 40;
-			" 2>/dev/null
-		)
+			"${_sql}" -bail -cmd ".timeout 200" "${_db}" \
+				"SELECT DISTINCT date(start_time,'unixepoch','localtime') AS d FROM page_stat WHERE duration>0 ORDER BY d DESC LIMIT 40;" \
+				2>/dev/null
+		) || true
 	fi
 	[ -n "${_list}" ] || return 1
 	_n=$(printf '%s\n' "${_list}" | awk -v today="${_today}" '
@@ -477,53 +475,42 @@ status_line() {
 	[ -n "${_w}" ] && _bits="${_bits}  ${_w}"
 	_a=$(last_refresh_label)
 	[ -n "${_a}" ] && _bits="${_bits}  ${_a}"
-	_k=$(koreader_streak 2>/dev/null || true)
-	if [ -n "${_k}" ]; then
-		_bits="${_bits}  KO ${_k}d"
+	# Optional: only when KOREADER_STATS_DB is set, so a bad sqlite never
+	# blocks board startup for everyone.
+	if [ -n "${KOREADER_STATS_DB}" ]; then
+		_k=$(koreader_streak 2>/dev/null || true)
+		[ -n "${_k}" ] && _bits="${_bits}  KO ${_k}d"
 	fi
-	# trim leading spaces
 	echo "${_bits}" | sed 's/^ *//'
 }
 
 stamp_status() {
+	# Never let footer chrome prevent the board from coming up.
 	[ -n "${FBINK}" ] && [ -f "${FBINK}" ] || return 0
-	_line=$(status_line)
+	_line=$(status_line 2>/dev/null) || _line=""
 	[ -n "${_line}" ] || return 0
 	log "status: ${_line}"
 
-	# png_rotate=90 puts the landscape footer on the RIGHT edge of the FB.
-	# Stand the Kindle on that edge → that strip is the visual bottom (SALIR).
-	# Stamp on the outer footer row (closer to the bezel), same reading dir as PNG.
+	# Fixed PW coords — avoid `fbink -e` (can be slow/noisy on some builds).
+	# png_rotate=90 → landscape footer is the RIGHT edge of the FB.
 	_W=758
 	_H=1024
-	_eval=$("${FBINK}" -e 2>/dev/null)
-	_vw=$(printf '%s\n' "${_eval}" | sed -n 's/.*viewWidth=\([0-9][0-9]*\).*/\1/p' | head -1)
-	_vh=$(printf '%s\n' "${_eval}" | sed -n 's/.*viewHeight=\([0-9][0-9]*\).*/\1/p' | head -1)
-	[ -n "${_vw}" ] && _W="${_vw}"
-	[ -n "${_vh}" ] && _H="${_vh}"
-
 	_rot=$(echo "${PNG_ROTATE}" | tr -cd '0-9')
 	: "${_rot:=0}"
 
 	if [ "${_rot}" = "90" ] || [ "${_rot}" = "270" ]; then
-		# Outer row of the ~56px footer strip (row 2 under SALIR / lluvia).
 		_x=$((_W - 20))
 		[ "${_x}" -lt 0 ] && _x=8
-		# FBInk -R is clockwise; PNG footer reads correctly with 270.
-		for _r in 270 90; do
-			if "${FBINK}" -q -R "${_r}" -x "${_x}" -y 16 -h regular "${_line}" >> "${LOG}" 2>&1; then
-				log "status: stamped rot=${_r} x=${_x} y=16"
-				return 0
-			fi
-		done
+		# Prefer 270 (matches PNG); ignore failures — board already painted.
+		"${FBINK}" -q -R 270 -x "${_x}" -y 16 "${_line}" >> "${LOG}" 2>&1 && return 0
+		"${FBINK}" -q -R 90 -x "${_x}" -y 16 "${_line}" >> "${LOG}" 2>&1 && return 0
 	fi
 
 	_y=$((_H - 14))
 	[ "${_y}" -lt 0 ] && _y=0
-	if "${FBINK}" -q -x 12 -Y "${_y}" -h regular "${_line}" >> "${LOG}" 2>&1; then
-		return 0
-	fi
-	"${FBINK}" -q -m -Y -12 -h regular "${_line}" >> "${LOG}" 2>&1
+	"${FBINK}" -q -x 12 -Y "${_y}" "${_line}" >> "${LOG}" 2>&1 && return 0
+	"${FBINK}" -q -m -Y -12 "${_line}" >> "${LOG}" 2>&1
+	return 0
 }
 
 in_quiet_hours() {
@@ -667,10 +654,13 @@ display_image() {
 			log "display: draw failed after lock"
 			exit 1
 		fi
-		stamp_status
+		# Mark showing BEFORE footer stamp. stamp_status used to run first and
+		# could hang (sqlite / fbink -e), so Auto never saw showing.pid and
+		# quit — Semanal looked like it "didn't start".
 		echo "${_path}" > "${CACHE}/showing.path"
 		echo "1" > "${CACHE}/showing.pid"
 		start_waiter
+		stamp_status
 		sleep 1
 		if ! waiter_alive; then
 			# Nothing would watch for the exit tap: the UI would stay frozen
