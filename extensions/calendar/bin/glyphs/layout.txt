@@ -1,5 +1,5 @@
-px=732
-py0=1005
-advance=8
+px=729
+lx0=744
+land_w=1024
 cell_h=16
-footer_h=56
+footer_h=42

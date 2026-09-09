@@ -93,7 +93,7 @@ class Config:
     weather_place: str = "Carlos Paz, Cordoba"
 
 
-FOOTER_H = 56
+FOOTER_H = 42
 
 
 def canvas_size(cfg: Config) -> tuple[int, int]:
@@ -124,34 +124,42 @@ def draw_exit_footer(
     failed_feeds: int = 0,
     extra: str = "",
 ) -> None:
-    """Light footer (no black bar): exit + rain on row 1, status row blank for stamp.
+    """One-line light footer: large rain alert left; right free for device stamp.
 
-    Pre-rotate canvas coords. After png_rotate=90 the strip is the right edge of
-    the portrait PNG = visual bottom when the Kindle stands on that edge.
+    `generated` is unused (kept so callers stay stable). After png_rotate=90 the
+    strip is the right edge of the portrait PNG = visual bottom on the desk.
     """
+    del generated  # time lives in the on-device Act stamp, not the PNG footer
     footer_h = FOOTER_H
     y0 = h - footer_h
-    f_foot = pil_fonts(15, bold=True)
-    f_meta = pil_fonts(12, bold=False)
+    f_rain = pil_fonts(22, bold=True)
 
     d.rectangle([0, y0, w, h], fill=255)
     d.line([0, y0, w, y0], fill=0, width=1)
 
-    # Row 1: SALIR · Toca para salir · lluvia… (time kept short so rain fits)
-    bits: list[str] = ["Toca para salir"]
-    if generated is not None:
-        bits.insert(0, generated.strftime("%H:%M"))
-    if extra:
-        bits.append(extra)
+    # Right ~280px reserved for Bat / WiFi / Act glyphs on-device.
+    stamp_reserve = 280
+    rain_max = max(80, w - stamp_reserve - 16)
+
+    label = (extra or "").strip()
     if failed_feeds:
-        bits.append(f"SIN DATOS: {failed_feeds} cal")
-    meta = _fit_text("  ·  ".join(bits), f_meta, w - 78)
+        warn = f"SIN DATOS: {failed_feeds} cal"
+        label = f"{label}  ·  {warn}" if label else warn
 
-    d.text((10, y0 + 5), "SALIR", font=f_foot, fill=0)
-    d.text((72, y0 + 7), meta, font=f_meta, fill=40)
+    if not label:
+        return
 
-    # Row 2 left blank on purpose — Bat / WiFi / Act / KO stamped on-device.
-
+    # High-contrast rain/warning chip: black bar, white bold type.
+    pad_x, pad_y = 10, 4
+    text = _fit_text(label, f_rain, rain_max - 2 * pad_x)
+    tw = int(f_rain.getlength(text))
+    th = 22
+    box = [8, y0 + 5, 8 + tw + 2 * pad_x, y0 + 5 + th + 2 * pad_y]
+    # Keep chip inside the footer.
+    if box[3] > h - 2:
+        box[3] = h - 2
+    d.rectangle(box, fill=0)
+    d.text((box[0] + pad_x, box[1] + pad_y - 1), text, font=f_rain, fill=255)
 
 @dataclass
 class Ev:

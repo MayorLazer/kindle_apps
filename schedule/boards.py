@@ -154,12 +154,12 @@ def fmt_temp(v: float | None) -> str:
 
 
 def rain_alert(weather: Weather | None, today: date, threshold: int = 40) -> str:
-    """Short footer warning when rain is likely today or tomorrow."""
+    """Footer rain line — short, uppercase, easy to spot on e-ink."""
     if weather is None or not weather.ok or not weather.daily:
         return ""
     by_day = {fc.day: fc for fc in weather.daily}
     parts: list[str] = []
-    for label, day in (("hoy", today), ("manana", today + timedelta(days=1))):
+    for label, day in (("HOY", today), ("MANANA", today + timedelta(days=1))):
         fc = by_day.get(day)
         if fc is None:
             continue
@@ -173,7 +173,7 @@ def rain_alert(weather: Weather | None, today: date, threshold: int = 40) -> str
                 parts.append(label)
     if not parts:
         return ""
-    return "Lluvia " + " · ".join(parts)
+    return "LLUVIA " + " · ".join(parts)
 
 
 def _new_canvas(cfg: g.Config) -> tuple[Image.Image, ImageDraw.ImageDraw, int, int]:

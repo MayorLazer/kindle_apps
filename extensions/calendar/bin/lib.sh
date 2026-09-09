@@ -502,14 +502,17 @@ stamp_status() {
 	}
 
 	_px=$(sed -n 's/^px=//p' "${_layout}" | head -1 | tr -cd '0-9')
+	_lx=$(sed -n 's/^lx0=//p' "${_layout}" | head -1 | tr -cd '0-9')
+	_land_w=$(sed -n 's/^land_w=//p' "${_layout}" | head -1 | tr -cd '0-9')
+	: "${_lx:=744}"
+	: "${_land_w:=1024}"
 	[ -n "${_px}" ] || {
 		log "status: bad glyphs layout"
 		return 0
 	}
 
-	# Landscape x along the footer; portrait y = 1024 - lx - glyph_advance.
-	_lx=10
-	_land_w=1024
+	# Landscape x along the footer; portrait y = land_w - lx - glyph_advance.
+	# lx0 sits to the right of the rain chip on the one-line footer.
 	_i=0
 	_len=${#_line}
 	while [ "${_i}" -lt "${_len}" ]; do

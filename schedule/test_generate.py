@@ -223,8 +223,9 @@ class TestBoards(unittest.TestCase):
             ],
         )
         alert = boards.rain_alert(weather, day)
-        self.assertIn("manana", alert)
+        self.assertIn("MANANA", alert)
         self.assertIn("60%", alert)
+        self.assertIn("LLUVIA", alert)
 
     def test_today_weather_month_match_screen(self) -> None:
         import boards
